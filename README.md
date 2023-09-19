@@ -1,4 +1,4 @@
-![](https://github.com/niB-gnaW/FLApy/blob/master/Pics/logo.png)
+![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/logo.png)
 # FLApy 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/FLApy?label=Downloads&style=flat-square)
 
@@ -25,7 +25,7 @@ pip install FLApy      # Install the package
 ## Usage
 A simple workflow is as follows:
 
-![](https://github.com/niB-gnaW/FLApy/blob/master/Pics/WorkFlow_FLApy.png)
+![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/WorkFlow_FLApy.png)
 
 A simple example can be found in the [Simple guidance](https://github.com/niB-gnaW/FLApy/blob/master/examples/A_simple_guidance.ipynb).
 
