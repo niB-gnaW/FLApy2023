@@ -26,7 +26,6 @@ class LAcalculator():
                  inDataContainer = None,
                  lensMapRadius = 500,
                  pointSizeRange = (0.5, 7),
-                 extraOBS = False,
                  centerTerrain = True):
 
         if inDataContainer is None:
@@ -45,13 +44,10 @@ class LAcalculator():
 
         self.pointsBuffered = self._DataContainer.field_data['PTS']
         self.mergeTerrain = np.concatenate((self._DataContainer.field_data['DEM'], self._DataContainer.field_data['DTM']), axis=0)
-        self.extraOBS = extraOBS
-        if self.extraOBS is True:
-            self._obsSet = self._DataContainer.field_data['OBS_extra']
-        else:
-            self._obsSet = self._DataContainer.field_data['OBS_SFL']
-
+        self._obsSet = self._DataContainer.field_data['OBS_SFL']
+        self.__obsExternalLabel = str(self._DataContainer.field_data['obsExternalLabel'][0])
         self.centerTerrain = centerTerrain
+
         if centerTerrain is True:
             obsXcenter = np.mean(self._obsSet[:, 0])
             obsYcenter = np.mean(self._obsSet[:, 1])
@@ -324,58 +320,33 @@ class LAcalculator():
         else:
             numCPU = int(CPU_count)
 
-        if self.extraOBS is False:
+        obsIdx = np.arange(len(self._obsSet))
+        SVFcellData = np.zeros((len(self._obsSet), 2))
 
-            obsIdx = np.where(self._DataContainer.cell_data['Classification'] == 1)[0]
-            SVFcellData = np.zeros((len(self._obsSet), 2))
+        if multiPro == 'joblib':
+            time_start = time.time()
+            print('\033[32mProcessing started!'+ 'Number of obs:'+ str(len(obsIdx)) + '\033[0m')
 
-            if multiPro == 'joblib':
-                time_start = time.time()
+            if self.centerTerrain is False:
+                SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingle)(arg) for arg in obsIdx)
+            else:
+                SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingleFAST)(arg) for arg in obsIdx)
 
-                print('\033[32mProcessing started!'+ 'Number of obs:'+ str(len(obsIdx)) + '\033[0m')
-                if self.centerTerrain is False:
-                    SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingle)(arg) for arg in obsIdx)
-                else:
-                    SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingleFAST)(arg) for arg in obsIdx)
-                time_end = time.time()
-                print('\033[32mProcessing finished!'+ str(time_end - time_start)+'s' + '\033[0m')
+            time_end = time.time()
+            print('\033[32mProcessing finished!'+ str(time_end - time_start)+'s' + '\033[0m')
 
+        if multiPro == 'p_map':
+            from p_tqdm import p_map
+            time_start = time.time()
+            print('\033[32mProcessing started!' + 'Number of obs:' + str(len(obsIdx)) + '\033[0m')
+            SVFset = p_map(self.computeSingle, obsIdx, num_cpus = numCPU, desc='Batch processing', ncols=100)
+            time_end = time.time()
+            print('\033[32mProcessing finished!' + str(time_end - time_start) + 's' + '\033[0m')
 
-            SVFset = np.array(SVFset)
-
-            SVFcellData[obsIdx] = SVFset
-            self.multi_SVF_ = SVFcellData
-            self._DataContainer.cell_data['SVF_flat'] = SVFcellData[:, 0]
-            self._DataContainer.cell_data['SVF_hemi'] = SVFcellData[:, 1]
-
-        else:
-            obsIdx = np.arange(len(self._obsSet))
-            SVFcellData = np.zeros((len(self._obsSet), 2))
-
-            if multiPro == 'joblib':
-                time_start = time.time()
-                print('\033[32mProcessing started!'+ 'Number of obs:'+ str(len(obsIdx)) + '\033[0m')
-
-                if self.centerTerrain is False:
-                    SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingle)(arg) for arg in obsIdx)
-                else:
-                    SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingleFAST)(arg) for arg in obsIdx)
-
-                time_end = time.time()
-                print('\033[32mProcessing finished!'+ str(time_end - time_start)+'s' + '\033[0m')
-
-            if multiPro == 'p_map':
-                from p_tqdm import p_map
-                time_start = time.time()
-                print('\033[32mProcessing started!' + 'Number of obs:' + str(len(obsIdx)) + '\033[0m')
-                SVFset = p_map(self.computeSingle, obsIdx, num_cpus = numCPU, desc='Batch processing', ncols=100)
-                time_end = time.time()
-                print('\033[32mProcessing finished!' + str(time_end - time_start) + 's' + '\033[0m')
-
-            SVFcellData[obsIdx] = np.array(SVFset)
-            self._DataContainer.field_data['SVF_flat'] = SVFcellData[:, 0]
-            self._DataContainer.field_data['SVF_hemi'] = SVFcellData[:, 1]
-            self._DataContainer.field_data['OBS_extra'] = np.concatenate((self._obsSet, SVFcellData[:, 0]), axis=0)
+        SVFcellData[obsIdx] = np.array(SVFset)
+        self._DataContainer.field_data['SVF_flat'] = SVFcellData[:, 0]
+        self._DataContainer.field_data['SVF_hemi'] = SVFcellData[:, 1]
+        self._DataContainer.field_data['OBS_extra'] = np.concatenate((self._obsSet, SVFcellData[:, 0]), axis=0)
 
         if save is None:
             self._DataContainer.save(self.tempSFL)

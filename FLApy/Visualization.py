@@ -17,3 +17,5 @@ def vis_3Dpoint(inPoints):    #xyz
 
 
 
+
+

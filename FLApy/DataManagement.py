@@ -8,12 +8,15 @@ import os
 import numpy as np
 import xarray as xr
 import open3d as o3d
+import skimage.morphology as sm
 
 from laspy.file import File
 from pyvista.core.grid import UniformGrid
 from PVGeo.model_build import CreateUniformGrid
 from PVGeo.grids import ExtractTopography
 from scipy import interpolate
+from scipy.ndimage import distance_transform_edt
+from collections import deque
 
 
 class StudyFieldLattice(UniformGrid):
@@ -42,6 +45,7 @@ class StudyFieldLattice(UniformGrid):
         self._DTM = None
         self._obs = None
         self._DataContainer = None
+        self._obsExternalLabel = None
 
 
     def __getstate__(self):
@@ -159,7 +163,7 @@ class StudyFieldLattice(UniformGrid):
             self._DEMp = self.m2p(self._DEM)
             self._DEMmesh = data
 
-            return self._DEM
+
     @classmethod
     def m2p(cls, inMesh): #mesh to points
         # This function is used to convert the mesh data to point data.
@@ -173,30 +177,57 @@ class StudyFieldLattice(UniformGrid):
         _point = pv.PolyData(_point)
         return _point
 
-    def read_CsvData(self, filePath, skiprows = 1):
+    @classmethod
+    def p2m(cls, inPoints): #points to mesh
+        # This function is used to convert the point data to mesh data.
+        # Parameters:
+        #   inPoints: the point data.
+        # Return:
+        #   _mesh: the mesh data.
+        pointsArr = np.array(inPoints.points)
+        unique_x, x_indices = np.unique(pointsArr[:, 0], return_inverse=True)
+        unique_y, y_indices = np.unique(pointsArr[:, 1], return_inverse=True)
+        array_2d = np.full((len(unique_x), len(unique_y)), np.nan)
+        array_2d[x_indices, y_indices] = pointsArr[:, 2]
+        da = xr.DataArray(array_2d, coords={'x': unique_x, 'y': unique_y}, dims=['x', 'y'])
+        return da
+
+
+    def read_csvData(self, filePath, skiprows = 1, readAs = 'OBS'):
         # This function is used to read the csv data. (x,4)or(x,3)
         # Parameters:
         #   filePath: the path of the csv file.
         #   skiprows: the number of rows to skip at the beginning of the file.
-        #   add2DC: whether to add the data to the class.
+        #   readAs: the type of the csv file, default is OBS. OBS denotes the csv file is the observation points (x, 3).
+        #           OBS is used to set the observation points manually. exList denotes the csv file is the external list (x, 4).
+        #           exList is used to implement the sensitivity analysis or uncertainty analysis.
+        #
+        #
         # Return:
         #   obs: the csv data.
 
-        obs = np.loadtxt(filePath, dtype=np.float, delimiter=',', skiprows=skiprows)
+        if readAs == 'OBS':
+            obs = np.loadtxt(filePath, dtype=np.float, delimiter=',', skiprows=skiprows)
+            self._obs = obs
+            self._obsExternalLabel = 1
 
-        self._obs = obs
+        if readAs == 'exList':
+            obs = np.loadtxt(filePath, dtype=np.float, delimiter=',', skiprows=skiprows)
+            self._obs = obs
+            self._obsExternalLabel = 2
 
-        return self._obs
 
 
 
-
-    def gen_SFL(self, bbox, resolution, bufferSize = 100, generatedOBS = False):
-        # This function is used to generate the SFL.
+    def gen_SFL(self, bbox, resolution, bufferSize = 100):
+        # This function is used to generate the SFL. If users don't provide the DSM, DTM and DEM, the function will generate automatically.
         # Parameters:
         #   bbox: the bounding box of the SFL.
         #   resolution: the resolution of the SFL.
         #   bufferSize: the buffer size of the SFL.
+        #   generatedOBS: whether to generate the observation points.
+        #   genAuto: whether to generate all data required automatically.
+
 
 
         if self._point_cloud is None:
@@ -230,11 +261,26 @@ class StudyFieldLattice(UniformGrid):
         self._terPoints_buffered = self.clip_Points(self._terrainPoints, bboxBuffered)
         self._point_cloud_ = keptPoints
 
+
+
         if self._DSM is None:
-            raise OSError('DSM has not been read or constructed.')
+            print('\033[35mDSM has not been read or constructed. FLApy will generate automatically\033[0m')
+            self.surfacePoint = self.pc2raster(self._vegPoints_buffered, bboxBuffered[:2], bboxBuffered[2:], resolution)
+            self.get_DSM(self.surfacePoint, voxelDownSampling=False, resolution=resolution)
+            self._DSMp = self.m2p(self._DSM)
+            self._DSMmesh = self.p2m(self._DSMp)
 
         if self._DTM is None:
-            raise OSError('DTM has not been read or constructed.')
+            print('\033[35mDTM has not been read or constructed. FLApy will generate automatically\033[0m')
+            self.get_DTM(self._terPoints_buffered, voxelDownSampling=True, resolution=resolution)
+            self._DTMp = self.m2p(self._DTM)
+            self._DTMmesh = self.p2m(self._DTMp)
+
+        if self._DEM is None:
+            print('\033[35mDEM has not been read or constructed. FLApy will generate automatically. The DEM will be used as DEM due to no DEM detected.\033[0m')
+            self._DEM = self._DTM
+            self._DEMp = self.m2p(self._DEM)
+            self._DEMmesh = self.p2m(self._DEMp)
 
         self._SFL = CreateUniformGrid(origin=self.origin, spacing=self.spacing, extent=self.dimensions).apply()
 
@@ -245,15 +291,24 @@ class StudyFieldLattice(UniformGrid):
         self._vegPoints_TerrainNormalization = self.normlization_height(self.point_cloud_buffered)
         cellCenters = self._SFL.cell_centers()
 
-        if generatedOBS is False:
-            self._obsSet = np.array(cellCenters.points)
+        if self._obsExternalLabel is None:
+            self._obs = np.array(cellCenters.points)
+            self._cellPoints_TerrainNormalization = self.normlization_height(self._obs)
+            self._SFL.field_data['OBS_SFL'] = self._obs
+            self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
+
+        elif self._obsExternalLabel == 1:
+            self._obsSet = self._obs
             self._cellPoints_TerrainNormalization = self.normlization_height(self._obsSet)
             self._SFL.field_data['OBS_SFL'] = self._obsSet
             self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
 
-        else:
-            self.gen_OBS(cellCenters.points, self._DSMmesh, self._DTMmesh)
-            self._SFL.field_data['OBS_extra'] = self._obs
+        elif self._obsExternalLabel == 2:
+            self._obsSet = self._obs
+            self._cellPoints_TerrainNormalization = self.normlization_height(self._obsSet)
+            self._SFL.field_data['OBS_SFL'] = self._obsSet
+            self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
+
 
         Cdsm = self.m2p(self.DEM.clip_box(self._DTMp.bounds, invert=True))
 
@@ -261,44 +316,14 @@ class StudyFieldLattice(UniformGrid):
         self._SFL.field_data['DEM'] = Cdsm.points
         self._SFL.field_data['DTM'] = self._DTMp.points
         self._SFL.field_data['DSM'] = self._DSMp.points
-        self._SFL.field_data['OBS_extra'] = self._obs
 
+        self._SFL.add_field_data([self._obsExternalLabel], 'obsExternalLabel')
         self._SFL.add_field_data([self.temPath], 'temPath')
 
         self._SFL.save(self.temPath)
         print('\033[35mSFL has been generated!' + '\033[0m')
 
-    def gen_OBS(self, inPoints, inDSM, inDTM, zCount = 11, relativeHeight = False):
 
-        zMin = np.min(inPoints[:, -1])
-        inPoints = inPoints[inPoints[:, -1] == zMin]
-        xSet = inPoints[:, 0]
-        ySet = inPoints[:, 1]
-
-        zDSM = self.get_ValueByGivenPointsOnRasterMatrix(xSet, ySet, inDSM)
-        zDTM = self.get_ValueByGivenPointsOnRasterMatrix(xSet, ySet, inDTM)
-
-        xyzGened = []
-        if relativeHeight is False:
-            for gen_index in range(len(xSet)):
-                zDis = np.linspace(zDTM[0][gen_index], zDSM[0][gen_index] + 0.5, zCount)
-                xDis = np.full_like(zDis, xSet[gen_index])
-                yDis = np.full_like(zDis, ySet[gen_index])
-
-                xyzDis = np.vstack((xDis, yDis, zDis)).transpose()
-                xyzGened.append(xyzDis)
-
-        else:
-            for gen_index in range(len(xSet)):
-                zDis = np.linspace(zDTM[0][gen_index], zDSM[0][gen_index] + 0.5, zCount)
-                zDis = zDis - zDTM[0][gen_index]
-                xDis = np.full_like(zDis, xSet[gen_index])
-                yDis = np.full_like(zDis, ySet[gen_index])
-
-                xyzDis = np.vstack((xDis, yDis, zDis)).transpose()
-                xyzGened.append(xyzDis)
-
-        self._obs = np.vstack(np.array(xyzGened))
 
     def normlization_height(self, inPoints):
         # This function is used to normalize the height of the points.
@@ -396,6 +421,46 @@ class StudyFieldLattice(UniformGrid):
         return _mesh
 
 
+
+
+    def pc2raster(self, inPoints, x_bounds, y_bounds, resolution = 1):
+        # This function is used to convert the points to raster.
+        # Parameters:
+        #   inPoints: the points need to be converted.
+        #   resolution: the resolution of the raster.
+        # Return:
+        #   raster: the raster data.
+
+        x = inPoints[:, 0]
+        y = inPoints[:, 1]
+        z = inPoints[:, 2]
+
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
+
+        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
+        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
+
+
+        _raster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
+        np.maximum.at(_raster, (row_indices, col_indices), z)
+        _raster[_raster == -np.inf] = np.nan
+
+        mask_nan = np.isnan(_raster)
+        distances, indices = distance_transform_edt(mask_nan, return_indices=True)
+        nearest_values = _raster[tuple(indices)]
+        _raster[mask_nan] = nearest_values[mask_nan]
+
+
+        yy, xx = np.mgrid[y_max:y_min:-resolution, x_min:x_max:resolution]
+        out_array = np.vstack((xx.ravel(), yy.ravel(), _raster.ravel())).T
+
+        return out_array
+
+
+
+
+
     def get_DSM(self, input_points = None, voxelDownSampling = False, resolution = 1):
         # This function can do the interpolation based on given points
 
@@ -415,11 +480,10 @@ class StudyFieldLattice(UniformGrid):
         else:
             TP_vd = _inAP
 
+
         self._DSM = self.interp_ByPoints(TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution)
 
-        #DSMfilled = fp.coreFLApy_extra.rasterFilled()
 
-        #return DSM#, DSMfilled
 
     def get_DTM(self, input_points=None, voxelDownSampling=False, resolution=1):
         # This function can do the interpolation based on given points
@@ -460,14 +524,6 @@ class StudyFieldLattice(UniformGrid):
         da = raster.sel(x=tgt_x, y=tgt_y, method=method)
 
         return da.data
-
-    def get_status(self):
-        # This function is used to get the status of the SFL.
-        # Return:
-        #   status: the status of the SFL.
-
-
-        return
 
 
 
