@@ -8,15 +8,20 @@ import os
 import numpy as np
 import xarray as xr
 import open3d as o3d
-import skimage.morphology as sm
+import rasterio
+
 
 from laspy.file import File
 from pyvista.core.grid import UniformGrid
 from PVGeo.model_build import CreateUniformGrid
 from PVGeo.grids import ExtractTopography
 from scipy import interpolate
-from scipy.ndimage import distance_transform_edt
-from collections import deque
+from scipy.ndimage import distance_transform_edt, binary_erosion, binary_dilation, label, binary_closing
+from scipy.ndimage.morphology import generate_binary_structure
+from pysheds.grid import Grid
+from rasterio.transform import from_origin
+
+
 
 
 class StudyFieldLattice(UniformGrid):
@@ -259,22 +264,28 @@ class StudyFieldLattice(UniformGrid):
         self.point_cloud_buffered = self.clip_Points(self._vegPoints, bboxBuffered)
         self._vegPoints_buffered = self.clip_Points(self._vegPoints, bboxBuffered)
         self._terPoints_buffered = self.clip_Points(self._terrainPoints, bboxBuffered)
-        self._point_cloud_ = keptPoints
 
-
-
-        if self._DSM is None:
-            print('\033[35mDSM has not been read or constructed. FLApy will generate automatically\033[0m')
-            self.surfacePoint = self.pc2raster(self._vegPoints_buffered, bboxBuffered[:2], bboxBuffered[2:], resolution)
-            self.get_DSM(self.surfacePoint, voxelDownSampling=False, resolution=resolution)
-            self._DSMp = self.m2p(self._DSM)
-            self._DSMmesh = self.p2m(self._DSMp)
 
         if self._DTM is None:
             print('\033[35mDTM has not been read or constructed. FLApy will generate automatically\033[0m')
             self.get_DTM(self._terPoints_buffered, voxelDownSampling=True, resolution=resolution)
             self._DTMp = self.m2p(self._DTM)
             self._DTMmesh = self.p2m(self._DTMp)
+
+
+        self._vegPoints_buffered_norm = self.normlization_height(self._vegPoints_buffered)
+        self._point_cloud_ = keptPoints
+
+
+
+        if self._DSM is None:
+            print('\033[35mDSM has not been read or constructed. FLApy will generate automatically\033[0m')
+            self.surfacePoint = self.pc2raster3(self._vegPoints_buffered_norm, bboxBuffered[:2], bboxBuffered[2:], resolution)
+            self.get_DSM(self.surfacePoint, voxelDownSampling=False, resolution=resolution)
+            self._DSMp = self.m2p(self._DSM)
+            self._DSMmesh = self.p2m(self._DSMp)
+
+
 
         if self._DEM is None:
             print('\033[35mDEM has not been read or constructed. FLApy will generate automatically. The DEM will be used as DEM due to no DEM detected.\033[0m')
@@ -451,6 +462,61 @@ class StudyFieldLattice(UniformGrid):
         nearest_values = _raster[tuple(indices)]
         _raster[mask_nan] = nearest_values[mask_nan]
 
+        num_rows, num_cols = _raster.shape
+        transFrom = from_origin(x_min, y_max, resolution, resolution)
+
+        with rasterio.open(str(self._workspace + '/.dsmTemp.tif'), 'w', driver='GTiff', height=num_rows, width=num_cols, count=1, dtype=_raster.dtype, transform=transFrom, crs = 'EPSG:3857') as dst:
+            dst.write(_raster, 1)
+
+
+        gridTran = Grid.from_raster(str(self._workspace + '/.dsmTemp.tif'))
+        dsmRead = gridTran.read_raster(str(self._workspace + '/.dsmTemp.tif'))
+        pitFilled = gridTran.fill_pits(dsmRead)
+        _raster_filled = gridTran.fill_depressions(pitFilled)
+        _raster_filled = np.array(_raster_filled)
+
+        yy, xx = np.mgrid[y_max:y_min:-resolution, x_min:x_max:resolution]
+        out_array = np.vstack((xx.ravel(), yy.ravel(), _raster_filled.ravel())).T
+
+        return out_array
+
+
+    def pc2raster2(self, inPoints, x_bounds, y_bounds, resolution = 1):
+        # This function is used to convert the points to raster.
+        # Parameters:
+        #   inPoints: the points need to be converted.
+        #   resolution: the resolution of the raster.
+        # Return:
+        #   raster: the raster data.
+
+        x = inPoints[:, 0]
+        y = inPoints[:, 1]
+        z = inPoints[:, 2]
+
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
+
+        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
+        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
+
+        _raster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
+        np.maximum.at(_raster, (row_indices, col_indices), z)
+        _raster[_raster == -np.inf] = np.nan
+
+        mask_nan = np.isnan(_raster)
+        distances, indices = distance_transform_edt(mask_nan, return_indices=True)
+        nearest_values = _raster[tuple(indices)]
+        _raster[mask_nan] = nearest_values[mask_nan]
+
+        s = generate_binary_structure(2, 2)
+        eroded = binary_erosion(_raster, structure=s)
+        mask = _raster > eroded
+        labeled, num_features = label(mask)
+
+        for i in range(1, num_features + 1):
+            boundary = binary_dilation(labeled == i, structure=s) ^ (labeled == i)
+            boundary_mean = np.mean(_raster[boundary == 1])
+            _raster[labeled == i] = boundary_mean
 
         yy, xx = np.mgrid[y_max:y_min:-resolution, x_min:x_max:resolution]
         out_array = np.vstack((xx.ravel(), yy.ravel(), _raster.ravel())).T
@@ -458,6 +524,80 @@ class StudyFieldLattice(UniformGrid):
         return out_array
 
 
+    def pc2raster3(self, inPoints, x_bounds, y_bounds, threshold=1, min_size=10, resolution=1):
+        x = inPoints[:, 0]
+        y = inPoints[:, 1]
+        z = inPoints[:, 2]
+
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
+
+        max_size = (x_max - x_min) * (y_max - y_min)
+
+        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
+        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
+
+        _raster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
+        np.maximum.at(_raster, (row_indices, col_indices), z)
+        _raster[_raster == -np.inf] = np.nan
+
+        # Identify forest gaps based on threshold
+        chm_layer = np.copy(_raster)
+        gaps = (chm_layer <= threshold).astype(int)
+
+        # Close the gaps to connect adjacent forest gaps
+        struct_element = generate_binary_structure(2, 2)
+        closed_gaps = binary_closing(gaps, structure=struct_element)
+
+        # Label each gap
+        labeled, num_features = label(closed_gaps)
+        filled_gaps = np.copy(chm_layer)
+        gap_mask = np.zeros(chm_layer.shape, dtype=bool)
+
+        for i in range(1, num_features + 1):
+            mask_window = labeled == i
+            # First dilation
+            boundary_1 = binary_dilation(mask_window, structure=struct_element)
+
+            # Second dilation
+            boundary_2 = binary_dilation(boundary_1, structure=struct_element)
+
+            # Third dilation
+            boundary_3 = binary_dilation(boundary_2, structure=struct_element)
+
+            # Now, get the three layers of boundaries by subtracting
+            buffered_boundary_3 = boundary_3 ^ boundary_2
+            buffered_boundary_2 = boundary_2 ^ boundary_1
+            buffered_boundary_1 = boundary_1 ^ mask_window
+
+            # If you want a single mask that combines all three boundary layers:
+            combined_boundary = buffered_boundary_1 | buffered_boundary_2 | buffered_boundary_3
+
+            surrounding_tree_mean = np.nanmax(chm_layer[combined_boundary])
+
+            gap_area = np.sum(mask_window) * resolution ** 2
+            if min_size <= gap_area <= max_size:
+                filled_gaps[mask_window] = surrounding_tree_mean
+                gap_mask[mask_window] = True
+
+
+
+
+        # The next step is to adjust the filled raster based on the filled gaps
+        mask_of_filled_gaps = np.array(~gap_mask, dtype=np.uint8)
+
+        # Compute distance to the nearest filled gap for each pixel and get the nearest filled gap value
+        distances, indices = distance_transform_edt(mask_of_filled_gaps, return_indices=True)
+        nearest_filled_gap_values = filled_gaps[tuple(indices)]
+
+        # Increase the heights of those pixels which are below their nearest filled gap
+        mask_to_increase = filled_gaps < nearest_filled_gap_values
+        filled_gaps[mask_to_increase] = nearest_filled_gap_values[mask_to_increase]
+
+        yy, xx = np.mgrid[y_max:y_min:-resolution, x_min:x_max:resolution]
+        out_array = np.vstack((xx.ravel(), yy.ravel(), filled_gaps.ravel())).T
+
+        return out_array
 
 
 
