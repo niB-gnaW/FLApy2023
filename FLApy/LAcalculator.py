@@ -12,8 +12,9 @@ import time
 
 from scipy.spatial import KDTree
 from joblib import Parallel, delayed
+from FLApy.DataManagement import StudyFieldLattice
 
-class LAcalculator():
+class LAcalculator(StudyFieldLattice):
     # The class is used to calculate the LA based on the input SFL.
     # Parameters:
     # inDataContainer: the input SFL data container.
@@ -26,7 +27,8 @@ class LAcalculator():
                  inDataContainer = None,
                  lensMapRadius = 500,
                  pointSizeRange = (0.5, 7),
-                 centerTerrain = True):
+                 centerTerrain = True,
+                 downSample = True):
 
         if inDataContainer is None:
             raise ValueError('Please input a SFL data container!')
@@ -43,6 +45,11 @@ class LAcalculator():
         self.pointSizeRange = pointSizeRange
 
         self.pointsBuffered = self._DataContainer.field_data['PTS']
+        if downSample is True:
+            self.pointsBuffered = self.voxelDownsampling(self.pointsBuffered, 0.5)
+
+
+
         self.mergeTerrain = np.concatenate((self._DataContainer.field_data['DEM'], self._DataContainer.field_data['DTM']), axis=0)
         self._obsSet = self._DataContainer.field_data['OBS_SFL']
         self.__obsExternalLabel = str(self._DataContainer.field_data['obsExternalLabel'][0])
@@ -53,7 +60,7 @@ class LAcalculator():
             obsYcenter = np.mean(self._obsSet[:, 1])
             obsZcenter = np.mean(self._obsSet[:, 2])
             obsCenter = np.array([obsXcenter, obsYcenter, obsZcenter])
-            self.centerTerrain = self.drawIn_terrain(self.mergeTerrain, obsCenter)
+            self.centerTerrainDrawed = self.drawIn_terrain(self.mergeTerrain, obsCenter)
 
 
     def pol2cart(self, rho, phi):
@@ -148,7 +155,7 @@ class LAcalculator():
 
 
     def referenceGrid(self):
-        # Generate the reference grid.
+        # Generate a reference grid.
         # Return:
         #   grid_image: the reference grid.
         #   gridCoord: the coordinates of the reference grid.
@@ -226,9 +233,6 @@ class LAcalculator():
         return self.terCoverMap
 
 
-
-
-
     def cal_LA(self, image2ev):
         # Calculate the LA. Including the flat LA and the hemispherical LA.
         # Parameters:
@@ -290,11 +294,17 @@ class LAcalculator():
         return (SVF[0], SVF[1])
 
     def computeSingleFAST(self, index):
+        # Compute the LA for a single observation quickly.
+        # Parameters:
+        #   index: the index of the observation.
+        # Return:
+        #   LA: the LA.
+
 
         obsIn = self._obsSet[index]
 
         result4oneObs = self.drawIn_vegPoints(self.pointsBuffered, obsIn, self.pointSizeRange)
-        result4oneObsTer = self.centerTerrain
+        result4oneObsTer = self.centerTerrainDrawed
         mergeResult = result4oneObsTer * result4oneObs
 
         self.cMap4veg = result4oneObs
@@ -307,7 +317,7 @@ class LAcalculator():
 
 
 
-    def computeBatch(self, save = None, multiPro = 'joblib', CPU_count = None):
+    def computeBatch(self, save = None, multiPro = 'p_map', CPU_count = None):
         # Compute the LA for a batch of observations.
         # Parameters:
         #   save: the path to save the LA. If None, the LA will be saved in a temporary file.
@@ -339,7 +349,11 @@ class LAcalculator():
             from p_tqdm import p_map
             time_start = time.time()
             print('\033[32mProcessing started!' + 'Number of obs:' + str(len(obsIdx)) + '\033[0m')
-            SVFset = p_map(self.computeSingle, obsIdx, num_cpus = numCPU, desc='Batch processing', ncols=100)
+
+            if self.centerTerrain is False:
+                SVFset = p_map(self.computeSingle, obsIdx, num_cpus = numCPU, desc='Batch processing', ncols=100)
+            else:
+                SVFset = p_map(self.computeSingleFAST, obsIdx, num_cpus=numCPU, desc='Batch processing', ncols=100)
             time_end = time.time()
             print('\033[32mProcessing finished!' + str(time_end - time_start) + 's' + '\033[0m')
 
@@ -368,26 +382,31 @@ def update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoo
     #   ter2sph_phi: the azimuth angle of the terrain points.
     #   ter2pol_rho: the radius of the terrain points.
 
-    for idx in range(bins):
-        tbinMin = np.deg2rad(-180) + np.deg2rad(idx)
-        tbinMax = np.deg2rad(-180) + np.deg2rad(idx + 1)
-        keptPointsRho = ter2pol_rho[(ter2sph_phi >= tbinMin) & (ter2sph_phi < tbinMax)]
+    if len(ter2sph_phi) == 0:
+        return ndx
 
-        if len(keptPointsRho) != 0:
-            keptPointsRhoMin = np.min(keptPointsRho)
-        else:
-            Aloop = 2
-            while len(keptPointsRho) == 0:
-                tbinMax = np.deg2rad(-180) + np.deg2rad(idx + Aloop)
-                keptPointsRho = ter2pol_rho[(ter2sph_phi >= tbinMin) & (ter2sph_phi < tbinMax)]
-                Aloop = Aloop + 1
-            keptPointsRhoMin = np.min(keptPointsRho)
+    else:
 
-        keptGridRhoIdx = np.where((gridCoordPhi >= tbinMin) & (gridCoordPhi < tbinMax))[0]
-        keptGridRho = gridCoordRho[(gridCoordPhi >= tbinMin) & (gridCoordPhi < tbinMax)]
-        keptGridRhoIdx = keptGridRhoIdx[keptGridRho >= keptPointsRhoMin]
-        ndx[keptGridRhoIdx] = True
-    return ndx
+        for idx in range(bins):
+            tbinMin = np.deg2rad(-180) + np.deg2rad(idx)
+            tbinMax = np.deg2rad(-180) + np.deg2rad(idx + 1)
+            keptPointsRho = ter2pol_rho[(ter2sph_phi >= tbinMin) & (ter2sph_phi < tbinMax)]
+
+            if len(keptPointsRho) != 0:
+                keptPointsRhoMin = np.min(keptPointsRho)
+            else:
+                Aloop = 2
+                while len(keptPointsRho) == 0:
+                    tbinMax = np.deg2rad(-180) + np.deg2rad(idx + Aloop)
+                    keptPointsRho = ter2pol_rho[(ter2sph_phi >= tbinMin) & (ter2sph_phi < tbinMax)]
+                    Aloop = Aloop + 1
+                keptPointsRhoMin = np.min(keptPointsRho)
+
+            keptGridRhoIdx = np.where((gridCoordPhi >= tbinMin) & (gridCoordPhi < tbinMax))[0]
+            keptGridRho = gridCoordRho[(gridCoordPhi >= tbinMin) & (gridCoordPhi < tbinMax)]
+            keptGridRhoIdx = keptGridRhoIdx[keptGridRho >= keptPointsRhoMin]
+            ndx[keptGridRhoIdx] = True
+        return ndx
 
 
 

@@ -42,14 +42,17 @@ class StudyFieldLattice(UniformGrid):
         else:
             self._workspace = workspace
 
-        self.temPath = str(self._workspace + '/.temFile.vtk')
 
+
+        #string
+        self.temPath = str(self._workspace + '/.temFile.vtk')
+        #XYZ
         self._point_cloud = None
         self._DSM = None
         self._DEM = None
         self._DTM = None
         self._obs = None
-        self._DataContainer = None
+        #bool
         self._obsExternalLabel = None
 
 
@@ -142,58 +145,67 @@ class StudyFieldLattice(UniformGrid):
         #       DEM: Digital Elevation Model
 
         data = xr.open_rasterio(filePath)
-        values = np.asarray(data)
-        nans = values == data.nodatavals
-        if np.any(nans):
-            values[nans] = np.nan
-        xx, yy = np.meshgrid(data['x'], data['y'])
-        zz = values.reshape(xx.shape)
-        _mesh = pv.StructuredGrid(xx, yy, zz)
-        _mesh['data'] = values.ravel(order='F')
 
         if readAs == 'DSM':
-            self._DSM = _mesh
-            self._DSMp = self.m2p(self._DSM)
-            self._DSMmesh = data
+            self._DSM = data
 
-            return self._DSM
         elif readAs == 'DTM':
-            self._DTM = _mesh
-            self._DTMp = self.m2p(self._DTM)
-            self._DTMmesh = data
+            self._DTM = data
 
-            return self._DTM
         elif readAs == 'DEM':
-            self._DEM = _mesh
-            self._DEMp = self.m2p(self._DEM)
-            self._DEMmesh = data
+            self._DEM = data
 
-
-    @classmethod
-    def m2p(cls, inMesh): #mesh to points
-        # This function is used to convert the mesh data to point data.
+    @staticmethod
+    def m2p(inMesh):
+        #mesh to points
+        # This function is used to convert the mesh data (xarray) to point data(xyv).
         # Parameters:
         #   inMesh: the mesh data.
         # Return:
         #   _point: the point data.
 
-        _point = np.array(inMesh.points)
-        _point = _point[~np.isnan(_point[:, 2])]
-        _point = pv.PolyData(_point)
-        return _point
+        if not all(dim in inMesh.dims for dim in ['x', 'y']):
+            raise ValueError("The input mesh must have 'x' and 'y' dimensions.")
 
-    @classmethod
-    def p2m(cls, inPoints): #points to mesh
-        # This function is used to convert the point data to mesh data.
+        values = np.asarray(inMesh)
+        nodatavals = inMesh.attrs.get('nodatavals')
+
+        if nodatavals is not None:
+            nans = values == nodatavals[0]
+            if np.any(nans):
+                values[nans] = np.nan
+
+        xx, yy = np.meshgrid(inMesh['x'], inMesh['y'])
+        result_array = np.column_stack((xx.ravel(), yy.ravel(), values.ravel()))
+
+        return result_array
+
+    @staticmethod
+    def p2m(inPoints):
+        #points to mesh
+        # This function is used to convert the point data(xyv) to mesh data(xarray).
         # Parameters:
         #   inPoints: the point data.
         # Return:
         #   _mesh: the mesh data.
-        pointsArr = np.array(inPoints.points)
+        pointsArr = np.array(inPoints)
         unique_x, x_indices = np.unique(pointsArr[:, 0], return_inverse=True)
         unique_y, y_indices = np.unique(pointsArr[:, 1], return_inverse=True)
+
         array_2d = np.full((len(unique_x), len(unique_y)), np.nan)
-        array_2d[x_indices, y_indices] = pointsArr[:, 2]
+        count_array = np.zeros_like(array_2d, dtype=int)
+
+        for i, (x_ind, y_ind, val) in enumerate(zip(x_indices, y_indices, pointsArr[:, 2])):
+            if np.isnan(array_2d[x_ind, y_ind]):
+                array_2d[x_ind, y_ind] = val
+                count_array[x_ind, y_ind] = 1
+            else:
+                array_2d[x_ind, y_ind] += val
+                count_array[x_ind, y_ind] += 1
+
+        valid_counts = count_array > 0
+        array_2d[valid_counts] /= count_array[valid_counts]
+
         da = xr.DataArray(array_2d, coords={'x': unique_x, 'y': unique_y}, dims=['x', 'y'])
         return da
 
@@ -269,64 +281,63 @@ class StudyFieldLattice(UniformGrid):
         if self._DTM is None:
             print('\033[35mDTM has not been read or constructed. FLApy will generate automatically\033[0m')
             self.get_DTM(self._terPoints_buffered, voxelDownSampling=True, resolution=resolution)
-            self._DTMp = self.m2p(self._DTM)
-            self._DTMmesh = self.p2m(self._DTMp)
 
 
         self._vegPoints_buffered_norm = self.normlization_height(self._vegPoints_buffered)
         self._point_cloud_ = keptPoints
 
 
-
         if self._DSM is None:
             print('\033[35mDSM has not been read or constructed. FLApy will generate automatically\033[0m')
-            self.surfacePoint = self.pc2raster3(self._vegPoints_buffered_norm, bboxBuffered[:2], bboxBuffered[2:], resolution)
-            self.get_DSM(self.surfacePoint, voxelDownSampling=False, resolution=resolution)
-            self._DSMp = self.m2p(self._DSM)
-            self._DSMmesh = self.p2m(self._DSMp)
-
+            self.gapFilled = self.fillGap3(self._vegPoints_buffered_norm, bboxBuffered[:2], bboxBuffered[2:], resolution)
+            self.get_DSM(self.gapFilled, voxelDownSampling=False, resolution=resolution)
 
 
         if self._DEM is None:
             print('\033[35mDEM has not been read or constructed. FLApy will generate automatically. The DEM will be used as DEM due to no DEM detected.\033[0m')
             self._DEM = self._DTM
-            self._DEMp = self.m2p(self._DEM)
-            self._DEMmesh = self.p2m(self._DEMp)
+
+        self._DSMp = pv.PolyData(self.m2p(self._DSM))
+        self._DTMp = pv.PolyData(self.m2p(self._DTM))
+
 
         self._SFL = CreateUniformGrid(origin=self.origin, spacing=self.spacing, extent=self.dimensions).apply()
-
         ext_dtm = ExtractTopography(invert=True).apply(self._SFL, self._DTMp)
         ext_dsm = ExtractTopography(invert=False).apply(self._SFL, self._DSMp)
         ext_merge = ext_dsm.cell_data['Extracted'] * ext_dtm.cell_data['Extracted']
         self._SFL.cell_data['Classification'] = ext_merge
-        self._vegPoints_TerrainNormalization = self.normlization_height(self.point_cloud_buffered)
-        cellCenters = self._SFL.cell_centers()
 
+
+        #NONE
         if self._obsExternalLabel is None:
+            cellCenters = self._SFL.cell_centers()
             self._obs = np.array(cellCenters.points)
-            self._cellPoints_TerrainNormalization = self.normlization_height(self._obs)
+            self._cellPoints_TerrainNormalization = self.normlization_height(np.array(cellCenters.points))
+            self._obs = self._obs[self._SFL.cell_data['Classification'] == 1]
             self._SFL.field_data['OBS_SFL'] = self._obs
             self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
 
+        #xyz
         elif self._obsExternalLabel == 1:
             self._obsSet = self._obs
             self._cellPoints_TerrainNormalization = self.normlization_height(self._obsSet)
             self._SFL.field_data['OBS_SFL'] = self._obsSet
             self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
 
+        #xyzv
         elif self._obsExternalLabel == 2:
             self._obsSet = self._obs
             self._cellPoints_TerrainNormalization = self.normlization_height(self._obsSet)
             self._SFL.field_data['OBS_SFL'] = self._obsSet
-            self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
+            self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -2]
 
 
-        Cdsm = self.m2p(self.DEM.clip_box(self._DTMp.bounds, invert=True))
+        Cdsm = self.m2p(self._DEM.sel(x = slice(bbox[0], bbox[1]), y = slice(bbox[2], bbox[3])))
 
         self._SFL.field_data['PTS'] = self.point_cloud_buffered
-        self._SFL.field_data['DEM'] = Cdsm.points
-        self._SFL.field_data['DTM'] = self._DTMp.points
-        self._SFL.field_data['DSM'] = self._DSMp.points
+        self._SFL.field_data['DEM'] = Cdsm
+        self._SFL.field_data['DTM'] = self.m2p(self._DTM)
+        self._SFL.field_data['DSM'] = self.m2p(self._DSM)
 
         self._SFL.add_field_data([self._obsExternalLabel], 'obsExternalLabel')
         self._SFL.add_field_data([self.temPath], 'temPath')
@@ -346,7 +357,7 @@ class StudyFieldLattice(UniformGrid):
         xs = inPoints[:, 0]
         ys = inPoints[:, 1]
         zs = inPoints[:, 2]
-        grabed = self.get_ValueByGivenPointsOnRasterMatrix(xs, ys, self._DTMmesh)
+        grabed = self.get_ValueByGivenPointsOnRasterMatrix(xs, ys, self._DTM)
 
         zNorm = zs - grabed
         zNorm[zNorm < 0] = 0
@@ -376,8 +387,8 @@ class StudyFieldLattice(UniformGrid):
 
         return keptPoints
 
-    @classmethod
-    def voxelDownsampling(cls, inPoints, resolution=0.5):
+    @staticmethod
+    def voxelDownsampling(inPoints, resolution=0.5):
         # This function is used to downsample the points.
         # Parameters:
         #   inPoints: the points need to be downsampled.
@@ -419,22 +430,22 @@ class StudyFieldLattice(UniformGrid):
 
         X_min, X_max = np.min(X), np.max(X)
         Y_min, Y_max = np.min(Y), np.max(Y)
-        Z_min, Z_max = np.min(Z), np.max(Z)
+
 
         cell_size = resolution
 
-        X_grid, Y_grid, Z_grid = np.meshgrid(np.arange(X_min, X_max, cell_size), np.arange(Y_min, Y_max, cell_size), np.arange(Z_min, Z_max, cell_size))
-        grid_data = interpolate.griddata(points, Z, (X_grid, Y_grid), method='linear')
+        X_grid, Y_grid = np.meshgrid(np.arange(X_min, X_max, cell_size), np.arange(Y_min, Y_max, cell_size))
+        grid_data = interpolate.griddata(points, Z, (X_grid, Y_grid), method='nearest')
 
-        _mesh = pv.StructuredGrid(X_grid, Y_grid, Z_grid)
-        _mesh['data'] = grid_data.ravel(order='F')
+        x_flat = X_grid.ravel()
+        y_flat = Y_grid.ravel()
+        z_flat = grid_data.ravel()
+        xyv_array = np.column_stack((x_flat, y_flat, z_flat))
 
-        return _mesh
+        return xyv_array
 
 
-
-
-    def pc2raster(self, inPoints, x_bounds, y_bounds, resolution = 1):
+    def fillGap1(self, inPoints, x_bounds, y_bounds, resolution = 1):
         # This function is used to convert the points to raster.
         # Parameters:
         #   inPoints: the points need to be converted.
@@ -480,8 +491,8 @@ class StudyFieldLattice(UniformGrid):
 
         return out_array
 
-
-    def pc2raster2(self, inPoints, x_bounds, y_bounds, resolution = 1):
+    @staticmethod
+    def fillGap2(inPoints, x_bounds, y_bounds, resolution = 1):
         # This function is used to convert the points to raster.
         # Parameters:
         #   inPoints: the points need to be converted.
@@ -523,8 +534,8 @@ class StudyFieldLattice(UniformGrid):
 
         return out_array
 
-
-    def pc2raster3(self, inPoints, x_bounds, y_bounds, threshold=1, min_size=10, resolution=1):
+    @staticmethod
+    def fillGap3(inPoints, x_bounds, y_bounds, threshold=1, min_size=10, resolution=1):
         x = inPoints[:, 0]
         y = inPoints[:, 1]
         z = inPoints[:, 2]
@@ -621,7 +632,7 @@ class StudyFieldLattice(UniformGrid):
             TP_vd = _inAP
 
 
-        self._DSM = self.interp_ByPoints(TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution)
+        self._DSM = self.p2m(self.interp_ByPoints(TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution))
 
 
 
@@ -643,8 +654,8 @@ class StudyFieldLattice(UniformGrid):
         else:
             _TP_vd = _inTP
 
-        self._DTM = self.interp_ByPoints(_TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution)
-        #return DTM
+        self._DTM = self.p2m(self.interp_ByPoints(_TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution))
+
 
 
 
