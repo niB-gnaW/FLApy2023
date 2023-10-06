@@ -1,12 +1,14 @@
 import FLApy as fp
-import pyvista as pv
+import matplotlib.pyplot as plt
 
 site = fp.DataManagement.StudyFieldLattice()
-site.read_LasData('/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/SimForestStandardDis10Numtree100.las')
-site.gen_SFL([100,200,100,200], 10)
+site.read_LasData('/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/SimForestStandardDis10Numtree100Sub05.las')
+site.gen_SFL([100,200,100,200], 1, obsType=3, udXSpacing=10, udYSpacing=10, udZNum=10)
+
 
 siteLA = fp.LAcalculator.LAcalculator(site)
-a = siteLA.computeBatch(multiPro = 'p_map', CPU_count=4)
+siteLA.computeBatch(multiPro = 'p_map', CPU_count=4)
+
 
 
 

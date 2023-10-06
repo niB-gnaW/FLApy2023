@@ -16,7 +16,7 @@ from pyvista.core.grid import UniformGrid
 from PVGeo.model_build import CreateUniformGrid
 from PVGeo.grids import ExtractTopography
 from scipy import interpolate
-from scipy.ndimage import distance_transform_edt, binary_erosion, binary_dilation, label, binary_closing
+from scipy.ndimage import distance_transform_edt, binary_erosion, binary_dilation, label, binary_closing, generic_filter
 from scipy.ndimage.morphology import generate_binary_structure
 from pysheds.grid import Grid
 from rasterio.transform import from_origin
@@ -236,19 +236,22 @@ class StudyFieldLattice(UniformGrid):
 
 
 
-    def gen_SFL(self, bbox, resolution, bufferSize = 100):
+    def gen_SFL(self, bbox, resolution, bufferSize = 100, obsType = None, udXSpacing = None, udYSpacing = None, udZNum = None):
         # This function is used to generate the SFL. If users don't provide the DSM, DTM and DEM, the function will generate automatically.
         # Parameters:
         #   bbox: the bounding box of the SFL.
         #   resolution: the resolution of the SFL.
         #   bufferSize: the buffer size of the SFL.
-        #   generatedOBS: whether to generate the observation points.
-        #   genAuto: whether to generate all data required automatically.
+        #   udXSpacing: the user-defined x spacing of the OBS if the traverse method forbidden.
+        #   udYSpacing: the user-defined y spacing of the OBS if the traverse method forbidden.
+        #   udZSpacing: the user-defined z spacing of the OBS if the traverse method forbidden.
+
 
 
 
         if self._point_cloud is None:
             raise OSError('Point cloud data has not been read.')
+        self._obsExternalLabel = obsType
 
 
         keptPoints = self.clip_Points(self._point_cloud, bbox)
@@ -256,12 +259,16 @@ class StudyFieldLattice(UniformGrid):
         xMin = bbox[0]
         yMin = bbox[2]
         zMin = min(keptPoints[:, 2])
+        xMax = bbox[1]
+        yMax = bbox[3]
+        zMax = max(keptPoints[:, 2])
 
         xComponent = np.ceil((np.ptp(keptPoints[:, 0])) / resolution) + 1
         yComponent = np.ceil((np.ptp(keptPoints[:, 1])) / resolution) + 1
         zComponent = np.ceil((np.ptp(keptPoints[:, 2])) / resolution) + 1
 
         self.origin = (xMin, yMin, zMin)
+        self.endP = (xMax, yMax, zMax)
         self.spacing = (int(resolution), int(resolution), int(resolution))
         self.dimensions = (int(xComponent), int(yComponent), int(zComponent))
 
@@ -293,6 +300,7 @@ class StudyFieldLattice(UniformGrid):
             self.get_DSM(self.gapFilled, voxelDownSampling=False, resolution=resolution)
 
 
+
         if self._DEM is None:
             print('\033[35mDEM has not been read or constructed. FLApy will generate automatically. The DEM will be used as DEM due to no DEM detected.\033[0m')
             self._DEM = self._DTM
@@ -319,17 +327,26 @@ class StudyFieldLattice(UniformGrid):
 
         #xyz
         elif self._obsExternalLabel == 1:
-            self._obsSet = self._obs
-            self._cellPoints_TerrainNormalization = self.normlization_height(self._obsSet)
-            self._SFL.field_data['OBS_SFL'] = self._obsSet
+            self._cellPoints_TerrainNormalization = self.normlization_height(self._obs)
+            self._SFL.field_data['OBS_SFL'] = self._obs
             self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
 
         #xyzv
         elif self._obsExternalLabel == 2:
-            self._obsSet = self._obs
-            self._cellPoints_TerrainNormalization = self.normlization_height(self._obsSet)
-            self._SFL.field_data['OBS_SFL'] = self._obsSet
-            self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -2]
+            self._cellPoints_TerrainNormalization = self.normlization_height(self._obs[:, :3])
+            self._SFL.field_data['OBS_SFL'] = self._obs
+            self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
+
+        #User-defined
+        elif self._obsExternalLabel == 3:
+            if udXSpacing is None or udYSpacing is None or udZNum is None:
+                raise ValueError('The user-defined spacing is not specified.')
+            self.gen_OBSbyUserDefined(udXSpacing, udYSpacing, udZNum)
+            self._SFL.field_data['OBS_SFL'] = self._obs
+
+            cellCenters = self._SFL.cell_centers()
+            self._cellPoints_TerrainNormalization = self.normlization_height(np.array(cellCenters.points))
+            self._SFL.cell_data['Z_normed'] = self._cellPoints_TerrainNormalization[:, -1]
 
 
         Cdsm = self.m2p(self._DEM.sel(x = slice(bbox[0], bbox[1]), y = slice(bbox[2], bbox[3])))
@@ -344,6 +361,47 @@ class StudyFieldLattice(UniformGrid):
 
         self._SFL.save(self.temPath)
         print('\033[35mSFL has been generated!' + '\033[0m')
+
+
+    def gen_OBSbyUserDefined(self, udXSpacing, udYSpacing, udZNum):
+        # This function is used to generate the observation points by user-defined spacing.
+        # Parameters:
+        #   udXSpacing: the user-defined x spacing of the OBS.
+        #   udYSpacing: the user-defined y spacing of the OBS.
+        #   udZSpacing: the user-defined z spacing of the OBS.
+
+        if udXSpacing <= 0 or udYSpacing <= 0 or udZNum <= 0:
+            raise ValueError("Spacing values must be positive.")
+
+        xOrigin = self.origin[0]
+        yOrigin = self.origin[1]
+
+        xEnd = self.endP[0]
+        yEnd = self.endP[1]
+
+        xx, yy = np.meshgrid(np.arange(xOrigin, xEnd, udXSpacing), np.arange(yOrigin, yEnd, udYSpacing), indexing='ij')
+        x_centers = xx + udXSpacing / 2
+        y_centers = yy + udYSpacing / 2
+        x_centers = x_centers.ravel()
+        y_centers = y_centers.ravel()
+        z_centersDSM = self.get_ValueByGivenPointsOnRasterMatrix(x_centers.ravel(), y_centers.ravel(), self.DSM)
+        z_centersDTM = self.get_ValueByGivenPointsOnRasterMatrix(x_centers.ravel(), y_centers.ravel(), self.DTM)
+
+        total_points = len(np.arange(xOrigin, xEnd, udXSpacing)) * len(np.arange(yOrigin, yEnd, udYSpacing)) * udZNum
+        obsGen = np.zeros((total_points, 3))
+
+        idx = 0
+        for i in range(len(x_centers)):
+            z_centers = np.linspace(z_centersDTM[i], z_centersDSM[i], udZNum)
+            xyz = np.column_stack((np.full_like(z_centers, x_centers[i]),
+                                   np.full_like(z_centers, y_centers[i]),
+                                   z_centers))
+            obsGen[idx:idx + udZNum, :] = xyz
+            idx += udZNum
+
+
+        self._obs = obsGen
+        self._obsExternalLabel = 3
 
 
 
@@ -407,7 +465,7 @@ class StudyFieldLattice(UniformGrid):
         #   voxelDownSampling: whether to downsample the points.
         #   resolution: the resolution of the matrix interpolated.
         # Return:
-        #   interpMatrix: the interpolated matrix.
+        #   xyv_array: the interpolated array.
 
         if input_points is None:
             _inAP = self._point_cloud
@@ -612,6 +670,11 @@ class StudyFieldLattice(UniformGrid):
 
 
 
+    @staticmethod
+    def nanmean_filter(input_Array):
+        output_Array = np.nanmean(input_Array)
+        return output_Array
+
     def get_DSM(self, input_points = None, voxelDownSampling = False, resolution = 1):
         # This function can do the interpolation based on given points
 
@@ -633,6 +696,18 @@ class StudyFieldLattice(UniformGrid):
 
 
         self._DSM = self.p2m(self.interp_ByPoints(TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution))
+        dsmArray = self._DSM.values
+
+        arrayFilled = generic_filter(dsmArray, self.nanmean_filter, [5, 5])
+
+        self._DSM = xr.DataArray(arrayFilled, coords=self._DSM.coords, dims=self._DSM.dims, attrs=self._DSM.attrs)
+
+
+
+
+
+
+
 
 
 
@@ -659,6 +734,8 @@ class StudyFieldLattice(UniformGrid):
 
 
 
+
+
     @staticmethod
     def get_ValueByGivenPointsOnRasterMatrix(x, y, raster, method = "nearest"):
         # This function is used to get a series of value by given points xy coordinate.
@@ -679,10 +756,6 @@ class StudyFieldLattice(UniformGrid):
 
 
 class dataInput(object):
-
-    '''''
-    d point cloud data and returns the PyVista object of the DTM. This method uses geostatistics, using the semivariogram function to fit the spatial variability of the point cloud data to generate the DTM. Optional parameters include: whether to plot the DTM, etc.
-    '''''
 
     def __init__(self, filePath = None):
         self.version = 2.0
