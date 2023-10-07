@@ -52,7 +52,7 @@ class LAcalculator(StudyFieldLattice):
 
         self.mergeTerrain = np.concatenate((self._DataContainer.field_data['DEM'], self._DataContainer.field_data['DTM']), axis=0)
         self._obsSet = self._DataContainer.field_data['OBS_SFL']
-        self.__obsExternalLabel = str(self._DataContainer.field_data['obsExternalLabel'][0])
+        self.__obsExternalLabel = str(self._DataContainer.field_data['OBS_Type'][0])
         self.centerTerrain = centerTerrain
 
         if centerTerrain is True:
@@ -331,7 +331,6 @@ class LAcalculator(StudyFieldLattice):
             numCPU = int(CPU_count)
 
         obsIdx = np.arange(len(self._obsSet))
-        SVFcellData = np.zeros((len(self._obsSet), 2))
 
         if multiPro == 'joblib':
             time_start = time.time()
@@ -357,10 +356,11 @@ class LAcalculator(StudyFieldLattice):
             time_end = time.time()
             print('\033[32mProcessing finished!' + str(time_end - time_start) + 's' + '\033[0m')
 
-        SVFcellData[obsIdx] = np.array(SVFset)
+        SVFcellData = np.array(SVFset)
         self._DataContainer.field_data['SVF_flat'] = SVFcellData[:, 0]
         self._DataContainer.field_data['SVF_hemi'] = SVFcellData[:, 1]
-        self._DataContainer.field_data['OBS_extra'] = np.concatenate((self._obsSet, SVFcellData[:, 0]), axis=0)
+
+
 
         if save is None:
             self._DataContainer.save(self.tempSFL)

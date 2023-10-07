@@ -118,7 +118,7 @@ All support for calculation 3D-LAH indicator system.
 The FLApy package is developed by Bin Wang, Cameron Proctor, Zhenghua Sun, Luxiang Lin, Zhiming Zhang.
 
 # Authors
-Bin Wang<sup>1, 2</sup>, Cameron Proctor<sup>2</sup>, Zhenghua Sun<sup>3</sup>, Luxiang Lin<sup>3</sup>, Zhiming Zhang<sup>1</sup>
+Bin Wang<sup>1, 2</sup>, Cameron Proctor<sup>2</sup>, Luxiang Lin<sup>3</sup>, Zhiming Zhang<sup>1</sup>
 
 1. Institute of Ecology and Geobotany, School of Ecology and Environmental Science, Yunnan University, Kunming 650091, China
 2. School of the Environment, University of Windsor, Windsor, N9B 3P4, Canada

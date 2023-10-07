@@ -30,64 +30,60 @@ class LAH_analysis(object):
     #   inGrid: the input grid data, that is the SFL data.
     #   fieldName: the field name of LA needed to be computed, default is 'SVF_flat'
 
-    def __init__(self, inGrid = None, fieldName = 'SVF_flat', interpolation = None, externalData = False):
+    def __init__(self, inGrid = None, fieldName = 'SVF_flat'):
 
         if inGrid is None:
             raise ValueError('Please input a SFL data container!')
-        elif inGrid is not None and isinstance(inGrid, str) is False:
-            self._inGrid = inGrid
+
+        elif inGrid is not None and os.path.isfile(inGrid) is False:
+            self._inGrid = inGrid._DataContainer
             self.tempSFL = str(self._inGrid.field_data['temPath'][0])
-        else:
+
+        elif inGrid is not None and isinstance(inGrid, str) is True:
             self._inGrid = pv.read(inGrid)
             self.tempSFL = str(self._inGrid.field_data['temPath'][0])
 
 
+        self.__obsType = self._inGrid.field_data['OBS_Type'][0]
 
+        if self.__obsType == 0 or self.__obsType == 1 or self.__obsType == 3:
+            self._valueImport = np.array(self._inGrid.field_data[fieldName])
+            self._OBScoords = np.array(self._inGrid.field_data['OBS_SFL'])
 
-        if interpolation is None:
-            self._inGrid = self._inGrid
-            self._value = np.array(self._inGrid.cell_data[fieldName])
-            self.allGridPoints = np.array(self._inGrid.cell_centers().points)
-        else:
-            self._inGrid = self.interpolation_3D(self._inGrid, fieldName = fieldName, resolutionGrid = interpolation, externalData = externalData)
-            self._value = np.array(self._inGrid.cell_data[fieldName])
-            self.allGridPoints = np.array(self._inGrid.cell_centers().points)
+        elif self.__obsType == 2:
+            self._valueImport = np.array(self._inGrid.field_data['Given_Value'][0])
+            self._OBScoords = np.array(self._inGrid.field_data['Given_Obs'])
 
+        self._inGridWraped = self.interpolation_3D(self._inGrid, fieldName = fieldName)
 
-
-        self.obsIdxWithin = np.where(self._inGrid.cell_data['Classification'] == 1)[0]
-        self._value = self._value[self.obsIdxWithin]
-        self.allGridPoints = self.allGridPoints[self.obsIdxWithin]
+        self.obsIdxWithin = np.where(self._inGridWraped.cell_data['Classification'] == 1)[0]
+        self._value = np.array(self._inGridWraped.cell_data[fieldName])[self.obsIdxWithin]
+        self.allGridPoints = np.array(self._inGridWraped.cell_centers().points)[self.obsIdxWithin]
 
         self._x_bar = np.sum(self._value) / len(self._value)
         self._s_Star = np.sqrt((np.sum(self._value ** 2) / len(self._value)) - (self._x_bar ** 2))
 
         self.kdtree = KDTree(self.allGridPoints)
-        self.gridSpacing = 1 #self._inGrid.spacing[0]
+        self.gridSpacing =  self._inGridWraped.field_data['SFLset_resolution'][0]
         self.voxelArea = self.gridSpacing ** 2
         self.voxelVolume = self.gridSpacing ** 3
 
         self.fieldName = fieldName
-    @staticmethod
-    def interpolation_3D(inGrid, fieldName = None, resolutionGrid = 1, externalData = False):
+
+        self._inGrid = self._inGridWraped
+
+    def interpolation_3D(self, inGrid, fieldName = None):
         pts_SFL = inGrid.points
-
-        if externalData is False:
-
-            given_obs = np.array(inGrid.cell_centers().points)
-            given_value = np.array(inGrid.cell_data[fieldName])
-        else:
-            given_obs = np.array(inGrid.field_data['OBS_extra'])
-            given_value = given_obs[:, -1]
-            given_obs = given_obs[:, :3]
 
 
         Xmin, Xmax = min(pts_SFL[:, 0]), max(pts_SFL[:, 0])
         Ymin, Ymax = min(pts_SFL[:, 1]), max(pts_SFL[:, 1])
         Zmin, Zmax = min(pts_SFL[:, 2]), max(pts_SFL[:, 2])
 
+        resolutionGrid = int(inGrid.field_data['SFLset_resolution'])
+
         Granges = [[Xmin, Xmax, resolutionGrid], [Ymin, Ymax, resolutionGrid], [Zmin, Zmax, resolutionGrid]]
-        inter = naturalneighbor.griddata(given_obs, given_value, Granges)
+        inter = naturalneighbor.griddata(self._OBScoords, self._valueImport, Granges)
 
         tensorGrid = pv.UniformGrid()
         tensorGrid.dimensions = np.array(inter.shape) + 1
@@ -99,7 +95,8 @@ class LAH_analysis(object):
         tensorGrid.field_data['OBS_SFL'] = inGrid.field_data['OBS_SFL']
         tensorGrid.field_data['DSM'] = inGrid.field_data['DSM']
         tensorGrid.field_data['DTM'] = inGrid.field_data['DTM']
-        tensorGrid.field_data['OBS_extra'] = inGrid.field_data['OBS_extra']
+        tensorGrid.field_data['DEM'] = inGrid.field_data['DEM']
+        tensorGrid.field_data['SFLset_resolution'] = inGrid.field_data['SFLset_resolution']
 
         tensorGrid.add_field_data([str(inGrid.field_data['temPath'][0])], 'temPath')
 
@@ -120,8 +117,8 @@ class LAH_analysis(object):
         da = pd.DataFrame(_dtm, columns=["x", "y", "value"])
         pivoted_df = da.pivot(index="y", columns="x", values="value")
         da = xr.DataArray(pivoted_df)
+
         tensorGridCenterPts = np.array(tensorGrid.cell_centers().points)
-        tensorGrid.field_data['OBS_SFL'] = tensorGridCenterPts
         tgt_x = xr.DataArray(tensorGridCenterPts[:, 0], dims='points')
         tgt_y = xr.DataArray(tensorGridCenterPts[:, 1], dims='points')
         daquery = da.sel(x=tgt_x, y=tgt_y, method='nearest')
@@ -625,16 +622,6 @@ class LAH_analysis(object):
         return self.indicatorCatalog
 
         print('\033[LAH calculation finished!!!'+'\033[0m')
-
-
-    def diff_SFL(self, SFL1, SFL2):
-        SFL2018 = pv.read(SFL1)
-        SFL2021 = pv.read(SFL2)
-
-        SVF2018 = SFL2018.cell_data['SVF_flat']
-        SVF2021 = SFL2021.cell_data['SVF_flat']
-
-        diffSVF = SVF2021 - SVF2018
 
 
 
