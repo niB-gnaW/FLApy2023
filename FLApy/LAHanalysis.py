@@ -17,6 +17,7 @@ from scipy.optimize import curve_fit
 from scipy.spatial import ConvexHull
 from scipy.stats import entropy
 from scipy.spatial import KDTree
+from sklearn.neighbors import NearestNeighbors
 from PVGeo.grids import ExtractTopography
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -56,9 +57,9 @@ class LAH_analysis(object):
 
         self._inGridWraped = self.interpolation_3D(self._inGrid, fieldName = fieldName)
 
-        self.obsIdxWithin = np.where(self._inGridWraped.cell_data['Classification'] == 1)[0]
-        self._value = np.array(self._inGridWraped.cell_data[fieldName])[self.obsIdxWithin]
-        self.allGridPoints = np.array(self._inGridWraped.cell_centers().points)[self.obsIdxWithin]
+
+        self._value = np.array(self._inGridWraped.cell_data[fieldName])
+        self.allGridPoints = np.array(self._inGridWraped.cell_centers().points)
 
         self._x_bar = np.sum(self._value) / len(self._value)
         self._s_Star = np.sqrt((np.sum(self._value ** 2) / len(self._value)) - (self._x_bar ** 2))
@@ -130,12 +131,12 @@ class LAH_analysis(object):
 
 
 
-    def voxel_SummarySta(self):
+    def voxel_SummarySta(self, thinning = 3):
         self._inGrid.LAH_Vox_average, self._inGrid.LAH_Vox_std, self._inGrid.LAH_Vox_CV, self._inGrid.LAH_Vox_Range = self.summarySta(self._value)
 
         coords = self.allGridPoints
         values = self._value
-        self._inGrid.LAH_Vox_SAC_local, self._inGrid.LAH_Vox_SAC = self.cal_Moran(coords, values, ds=2)
+        self._inGrid.LAH_Vox_SAC_local, self._inGrid.LAH_Vox_SAC = self.cal_Moran(coords, values, ds=thinning)
         self._inGrid.LAH_Vox_Diversity = self.cal_Diversity(values)
         self._inGrid.LAH_Vox_Gini = self.cal_Gini(values)
 
@@ -185,6 +186,37 @@ class LAH_analysis(object):
         print('Spatial Automatically Correlationship was calculated in {} seconds'.format(time.time() - time1))
         return W_normalized
 
+    def calculate_spatial_weights_matrix_idw_LHS(self, coords, n_neighbors=None):
+        n_points = len(coords)
+        time1 = time.time()
+
+        print('Number of observers: {}'.format(
+            n_points) + '|Calculating Spatial Automatically Correlationship ...|' + ' Construct the NN ...')
+
+
+        n_neighbors = n_points if n_neighbors is None else n_neighbors
+
+
+        nn = NearestNeighbors(n_neighbors=n_neighbors, algorithm='ball_tree')
+        nn.fit(coords)
+
+
+        distances, indices = nn.kneighbors(coords)
+
+        print('NN was constructed in {} seconds'.format(time.time() - time1))
+
+        row_indices = np.arange(n_points)[:, None]
+        sorted_distances = distances[row_indices, indices.argsort()]
+        sorted_distances = np.maximum(sorted_distances, 1e-6)
+
+        W = 1 / sorted_distances
+        np.fill_diagonal(W, 0)
+        row_sums = W.sum(axis=1)
+        W_normalized = W / row_sums[:, np.newaxis]
+
+        print('Spatial Automatically Correlationship was calculated in {} seconds'.format(time.time() - time1))
+        return W_normalized
+
 
     def cal_Moran(self, coords, values, ds = 1):
         pcd = o3d.geometry.PointCloud()
@@ -197,7 +229,7 @@ class LAH_analysis(object):
         nni = nn[1]
         valuesd = values[nni]
 
-        W = self.calculate_spatial_weights_matrix_idw(coordsd)
+        W = self.calculate_spatial_weights_matrix_idw_LHS(coordsd)
         n = len(valuesd)
         mean_value = np.mean(valuesd)
         deviation = valuesd - mean_value
@@ -221,7 +253,7 @@ class LAH_analysis(object):
         time1 = time.time()
         print('Calculating Vertical Light Attenuation ...')
         relativeHeight = np.array(self._inGrid.cell_data['Z_normed'])
-        relativeHeight = relativeHeight[self.obsIdxWithin]
+
         relativeHeight[relativeHeight < 0] = 0
         relativeHeight = relativeHeight
         _SVF = self.normalize_array(self._value)
@@ -260,7 +292,7 @@ class LAH_analysis(object):
 
     def horizontal_Summary(self, givenHeight = 1.5):
         relativeHeight = np.array(self._inGrid.cell_data['Z_normed'])
-        relativeHeight = relativeHeight[self.obsIdxWithin]
+
         relativeHeight[relativeHeight < 0] = 0
 
         _SVF = self._value
@@ -433,18 +465,18 @@ class LAH_analysis(object):
         print('Gi_KDTree query time: ', time.time() - time1)
         inverse_distances = 1 / distances[:, 1:]
 
-        # 计算Getis-Ord Gi*统计量
+        # Getis-Ord Gi*
         n = len(xyz)
         mean_X = np.mean(values)
         S = np.std(values)
 
-        # 分子
+
         numerator = np.array([np.sum(inverse_distances[i] * values[neighbors[1:]]) - mean_X * np.sum(inverse_distances[i]) for i, neighbors in tqdm(enumerate(nearest_neighbors_indices),
                                                                                                                                                     total=len(xyz),
                                                                                                                                                     desc='Calculating Gi*',
                                                                                                                                                     ncols=100)])
 
-        # 分母
+
         w_square_sum = np.sum(inverse_distances ** 2, axis=1)
         denominator = S * np.sqrt((n * w_square_sum - np.sum(inverse_distances, axis=1) ** 2) / (n - 1))
 
@@ -464,7 +496,7 @@ class LAH_analysis(object):
         print('Time for Gi_Value saving: ', time.time() - time1, 's')
 
 
-    def computeLAH(self, Voxel = True, Vertical = True, Horizontal = True, Cluster3D = True, save = None):
+    def computeLAH(self, Voxel = True, Vertical = True, Horizontal = True, Cluster3D = True, save = None, thinning = 3):
 
         self._inGrid.LAH_Vox_average = 0
         self._inGrid.LAH_Vox_std = 0
@@ -503,15 +535,19 @@ class LAH_analysis(object):
         self._inGrid.LAH_3Dcluster_Cold_ShapeIndex = 0
 
         if Voxel is True:
-            self.voxel_SummarySta()
+            print('\033[1;32;45m' + '----Calculating Voxel-scale Light Heterogeneity ...----' + '\033[0m')
+            self.voxel_SummarySta(thinning=thinning)
 
         if Vertical is True:
+            print('\033[1;32;45m' + '----Calculating Vertical-scale Light Heterogeneity ...----' + '\033[0m')
             self.vertical_Summary()
 
         if Horizontal is True:
+            print('\033[1;32;45m' + '----Calculating Horizontal-scale Light Heterogeneity ...----' + '\033[0m')
             self.horizontal_Summary()
 
         if Cluster3D is True:
+            print('\033[1;32;45m' + '----Calculating 3D-Cluster Light Heterogeneity ...----' + '\033[0m')
             self.hotspotAnalysis_fast()
             self.cluster3D_Summary()
 
@@ -619,9 +655,8 @@ class LAH_analysis(object):
         else:
             self._inGrid.save(save)
 
+        print('\033[32m---LAH calculation finished!!!' + '\033[0m')
         return self.indicatorCatalog
-
-        print('\033[LAH calculation finished!!!'+'\033[0m')
 
 
 
