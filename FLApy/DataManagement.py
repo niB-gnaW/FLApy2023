@@ -18,11 +18,6 @@ from PVGeo.grids import ExtractTopography
 from scipy import interpolate
 from scipy.ndimage import distance_transform_edt, binary_erosion, binary_dilation, label, binary_closing, generic_filter
 from scipy.ndimage.morphology import generate_binary_structure
-from pysheds.grid import Grid
-from rasterio.transform import from_origin
-
-
-
 
 class StudyFieldLattice(UniformGrid):
     # This class is used to create a SFL object for the study field. All the data will be stored in this object.
@@ -181,34 +176,40 @@ class StudyFieldLattice(UniformGrid):
         return result_array
 
     @staticmethod
-    def p2m(inPoints):
+    def p2m(inPoints, resolutuon):
         #points to mesh
         # This function is used to convert the point data(xyv) to mesh data(xarray).
         # Parameters:
         #   inPoints: the point data.
         # Return:
         #   _mesh: the mesh data.
-        pointsArr = np.array(inPoints)
-        unique_x, x_indices = np.unique(pointsArr[:, 0], return_inverse=True)
-        unique_y, y_indices = np.unique(pointsArr[:, 1], return_inverse=True)
+        x = inPoints[:, 0]
+        y = inPoints[:, 1]
+        z = inPoints[:, 2]
 
-        array_2d = np.full((len(unique_x), len(unique_y)), np.nan)
-        count_array = np.zeros_like(array_2d, dtype=int)
+        x_min, x_max = np.min(x), np.max(x)
+        y_min, y_max = np.min(y), np.max(y)
 
-        for i, (x_ind, y_ind, val) in enumerate(zip(x_indices, y_indices, pointsArr[:, 2])):
-            if np.isnan(array_2d[x_ind, y_ind]):
-                array_2d[x_ind, y_ind] = val
-                count_array[x_ind, y_ind] = 1
-            else:
-                array_2d[x_ind, y_ind] += val
-                count_array[x_ind, y_ind] += 1
+        rol_indices = np.digitize(x, np.arange(x_min, x_max, 1)) - 1
+        col_indices = np.digitize(y, np.arange(y_max, y_min, -1)) - 1
 
-        valid_counts = count_array > 0
-        array_2d[valid_counts] /= count_array[valid_counts]
+        _rasteration = np.full((int((y_max - y_min) / resolutuon), int((x_max - x_min) / resolutuon)), -np.inf)
+        np.maximum.at(_rasteration, (col_indices, rol_indices), z)
+        _rasteration[_rasteration == -np.inf] = np.nan
 
-        da = xr.DataArray(array_2d, coords={'x': unique_x, 'y': unique_y}, dims=['x', 'y'])
-        return da
+        coords_nan = np.argwhere(np.isnan(_rasteration))
+        coords_not_nan = np.argwhere(~np.isnan(_rasteration))
 
+        values_not_nan = _rasteration[~np.isnan(_rasteration)]
+        filledNan = interpolate.griddata(coords_not_nan, values_not_nan, coords_nan, method='nearest')
+        _rasteration[np.isnan(_rasteration)] = filledNan
+
+        _mesh = xr.DataArray(data = _rasteration,
+                             dims = ['y', 'x'],
+                             coords = {'y': np.arange(y_max, y_min, -resolutuon), 'x': np.arange(x_min, x_max, resolutuon)},
+        )
+
+        return _mesh
 
     def read_csvData(self, filePath, skiprows = 1, readAs = 'OBS'):
         # This function is used to read the csv data. (x,4)or(x,3)
@@ -247,13 +248,9 @@ class StudyFieldLattice(UniformGrid):
         #   udYSpacing: the user-defined y spacing of the OBS if the traverse method forbidden.
         #   udZSpacing: the user-defined z spacing of the OBS if the traverse method forbidden.
 
-
-
-
         if self._point_cloud is None:
             raise OSError('Point cloud data has not been read.')
         self._obsType = obsType
-
 
         keptPoints = self.clip_Points(self._point_cloud, bbox)
 
@@ -288,18 +285,22 @@ class StudyFieldLattice(UniformGrid):
 
         if self._DTM is None:
             print('\033[35mDTM has not been read or constructed. FLApy will generate automatically\033[0m')
-            self.get_DTM(self._terPoints_buffered, voxelDownSampling=True, resolution=resolution)
-
+            self.get_DTM(input_points = self._terPoints_buffered,
+                         x_bounds = bboxBuffered[:2],
+                         y_bounds = bboxBuffered[2:],
+                         resolution=resolution)
 
         self._vegPoints_buffered_norm = self.normlization_height(self._vegPoints_buffered)
-        self._point_cloud_ = keptPoints
+        self._point_cloud_clipedByBbox = keptPoints
 
 
         if self._DSM is None:
             print('\033[35mDSM has not been read or constructed. FLApy will generate automatically\033[0m')
-            self.gapFilled = self.fillGap3(self._vegPoints_buffered_norm, bboxBuffered[:2], bboxBuffered[2:], resolution)
-            self.get_DSM(self.gapFilled, voxelDownSampling=False, resolution=resolution)
-
+            self.get_DSM(input_points=self._vegPoints_buffered_norm,
+                         x_bounds=bboxBuffered[:2],
+                         y_bounds=bboxBuffered[2:],
+                         resolution=resolution
+                         )
 
 
         if self._DEM is None:
@@ -316,15 +317,16 @@ class StudyFieldLattice(UniformGrid):
         ext_merge = ext_dsm.cell_data['Extracted'] * ext_dtm.cell_data['Extracted']
         self._SFL.cell_data['Classification'] = ext_merge
 
+        '''
         #FLApy provides four forms of observation points:
-        #1. (CODE is 0) The observation points are generated by FLApy automatically. The observation points are the voxel centers of the SFL.
-        #2. (CODE is 1) The observation points are the points provided by users. The points are stored in the field_data['OBS_SFL'].
-        #   The shape of the points is (x, 3), that is containing the x, y, z coordinates.
-        #3. (CODE is 2) The observation points are the points provided by users. The points are stored in the field_data['OBS_SFL'].
-        #   The shape of the points is (x, 4), that is containing the x, y, z, v coordinates.
-        #4. (CODE is 3) The observation points are generated by class method gen_OBSbyUserDefined. The observation points are stored in the field_data['OBS_SFL'].
-        #   The shape of the points is (x, 3), that is containing the x, y, z coordinates.
-
+        1. (CODE is 0) The observation points are generated by FLApy automatically. The observation points are the voxel centers of the SFL.
+        2. (CODE is 1) The observation points are the points provided by users. The points are stored in the field_data['OBS_SFL'].
+           The shape of the points is (x, 3), that is containing the x, y, z coordinates.
+        3. (CODE is 2) The observation points are the points provided by users. The points are stored in the field_data['OBS_SFL'].
+           The shape of the points is (x, 4), that is containing the x, y, z, v coordinates.
+        4. (CODE is 3) The observation points are generated by class method gen_OBSbyUserDefined. The observation points are stored in the field_data['OBS_SFL'].
+           The shape of the points is (x, 3), that is containing the x, y, z coordinates.
+        '''
 
         #NONE
         if self._obsType == 0:
@@ -352,16 +354,13 @@ class StudyFieldLattice(UniformGrid):
             self._SFL.field_data['OBS_SFL'] = self._obs
 
 
-
         Cdem = self.m2p(self._DEM.sel(x = slice(bbox[0], bbox[1]), y = slice(bbox[2], bbox[3])))
 
         self._SFL.field_data['PTS'] = self.point_cloud_buffered
         self._SFL.field_data['DEM'] = Cdem
         self._SFL.field_data['DTM'] = self.m2p(self._DTM)
         self._SFL.field_data['DSM'] = self.m2p(self._DSM)
-
         self._SFL.field_data['SFLset_resolution'] = self.spacing[0]
-
 
         self._SFL.add_field_data([self._obsType], 'OBS_Type')
         self._SFL.add_field_data([self.temPath], 'temPath')
@@ -411,7 +410,6 @@ class StudyFieldLattice(UniformGrid):
         self._obsType = 3
 
 
-
     def normlization_height(self, inPoints):
         # This function is used to normalize the height of the points.
         # Parameters:
@@ -431,8 +429,10 @@ class StudyFieldLattice(UniformGrid):
 
         return zNormedCoords
 
-    @classmethod
-    def clip_Points(cls, inPoints, bbox):
+
+
+    @staticmethod
+    def clip_Points(inPoints, bbox):
         # This function is used to clip the points.
         # Parameters:
         #   inPoints: the points need to be clipped.
@@ -465,62 +465,11 @@ class StudyFieldLattice(UniformGrid):
         vd = pointCloudInit.voxel_down_sample(voxel_size=resolution)
         return np.array(vd.points)
 
-    def interp_ByPoints(self, input_points = None, voxelDownSampling = False, resolution = 1):
-        # This function is used to interpolate the points.
-        # Parameters:
-        #   input_points: the points need to be interpolated.
-        #   voxelDownSampling: whether to downsample the points.
-        #   resolution: the resolution of the matrix interpolated.
-        # Return:
-        #   xyv_array: the interpolated array.
-
-        if input_points is None:
-            _inAP = self._point_cloud
-        else:
-            _inAP = input_points
-
-        if voxelDownSampling:
-            TP_vd = self.voxelDownsampling(_inAP, resolution)
-        else:
-            TP_vd = _inAP
-
-        X = TP_vd[:, 0]
-        Y = TP_vd[:, 1]
-        Z = TP_vd[:, 2]
-
-        X = np.array(X).reshape(-1, 1)
-        Y = np.array(Y).reshape(-1, 1)
-
-        points = np.concatenate([X, Y], axis=1)
-
-        X_min, X_max = np.min(X), np.max(X)
-        Y_min, Y_max = np.min(Y), np.max(Y)
-
-
-        cell_size = resolution
-
-        X_grid, Y_grid = np.meshgrid(np.arange(X_min, X_max, cell_size), np.arange(Y_min, Y_max, cell_size))
-        grid_data = interpolate.griddata(points, Z, (X_grid, Y_grid), method='nearest')
-
-        x_flat = X_grid.ravel()
-        y_flat = Y_grid.ravel()
-        z_flat = grid_data.ravel()
-        xyv_array = np.column_stack((x_flat, y_flat, z_flat))
-
-        return xyv_array
-
-
-    def fillGap1(self, inPoints, x_bounds, y_bounds, resolution = 1):
-        # This function is used to convert the points to raster.
-        # Parameters:
-        #   inPoints: the points need to be converted.
-        #   resolution: the resolution of the raster.
-        # Return:
-        #   raster: the raster data.
-
-        x = inPoints[:, 0]
-        y = inPoints[:, 1]
-        z = inPoints[:, 2]
+    @staticmethod
+    def get_DSM_ndarray(input_points, x_bounds, y_bounds, resolution=1):
+        x = input_points[:, 0]
+        y = input_points[:, 1]
+        z = input_points[:, 2]
 
         x_min, x_max = x_bounds
         y_min, y_max = y_bounds
@@ -528,161 +477,19 @@ class StudyFieldLattice(UniformGrid):
         col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
         row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
 
+        _DSMraster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
+        np.maximum.at(_DSMraster, (row_indices, col_indices), z)
+        _DSMraster[_DSMraster == -np.inf] = np.nan
 
-        _raster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
-        np.maximum.at(_raster, (row_indices, col_indices), z)
-        _raster[_raster == -np.inf] = np.nan
+        coords_nan = np.argwhere(np.isnan(_DSMraster))
+        coords_not_nan = np.argwhere(~np.isnan(_DSMraster))
 
-        mask_nan = np.isnan(_raster)
-        distances, indices = distance_transform_edt(mask_nan, return_indices=True)
-        nearest_values = _raster[tuple(indices)]
-        _raster[mask_nan] = nearest_values[mask_nan]
+        values_not_nan = _DSMraster[~np.isnan(_DSMraster)]
+        filledNan = interpolate.griddata(coords_not_nan, values_not_nan, coords_nan, method='nearest')
+        _DSMraster[np.isnan(_DSMraster)] = filledNan
+        return _DSMraster
 
-        num_rows, num_cols = _raster.shape
-        transFrom = from_origin(x_min, y_max, resolution, resolution)
-
-        with rasterio.open(str(self._workspace + '/.dsmTemp.tif'), 'w', driver='GTiff', height=num_rows, width=num_cols, count=1, dtype=_raster.dtype, transform=transFrom, crs = 'EPSG:3857') as dst:
-            dst.write(_raster, 1)
-
-
-        gridTran = Grid.from_raster(str(self._workspace + '/.dsmTemp.tif'))
-        dsmRead = gridTran.read_raster(str(self._workspace + '/.dsmTemp.tif'))
-        pitFilled = gridTran.fill_pits(dsmRead)
-        _raster_filled = gridTran.fill_depressions(pitFilled)
-        _raster_filled = np.array(_raster_filled)
-
-        yy, xx = np.mgrid[y_max:y_min:-resolution, x_min:x_max:resolution]
-        out_array = np.vstack((xx.ravel(), yy.ravel(), _raster_filled.ravel())).T
-
-        return out_array
-
-    @staticmethod
-    def fillGap2(inPoints, x_bounds, y_bounds, resolution = 1):
-        # This function is used to convert the points to raster.
-        # Parameters:
-        #   inPoints: the points need to be converted.
-        #   resolution: the resolution of the raster.
-        # Return:
-        #   raster: the raster data.
-
-        x = inPoints[:, 0]
-        y = inPoints[:, 1]
-        z = inPoints[:, 2]
-
-        x_min, x_max = x_bounds
-        y_min, y_max = y_bounds
-
-        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
-        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
-
-        _raster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
-        np.maximum.at(_raster, (row_indices, col_indices), z)
-        _raster[_raster == -np.inf] = np.nan
-
-        mask_nan = np.isnan(_raster)
-        distances, indices = distance_transform_edt(mask_nan, return_indices=True)
-        nearest_values = _raster[tuple(indices)]
-        _raster[mask_nan] = nearest_values[mask_nan]
-
-        s = generate_binary_structure(2, 2)
-        eroded = binary_erosion(_raster, structure=s)
-        mask = _raster > eroded
-        labeled, num_features = label(mask)
-
-        for i in range(1, num_features + 1):
-            boundary = binary_dilation(labeled == i, structure=s) ^ (labeled == i)
-            boundary_mean = np.mean(_raster[boundary == 1])
-            _raster[labeled == i] = boundary_mean
-
-        yy, xx = np.mgrid[y_max:y_min:-resolution, x_min:x_max:resolution]
-        out_array = np.vstack((xx.ravel(), yy.ravel(), _raster.ravel())).T
-
-        return out_array
-
-    @staticmethod
-    def fillGap3(inPoints, x_bounds, y_bounds, threshold=1, min_size=10, resolution=1):
-        x = inPoints[:, 0]
-        y = inPoints[:, 1]
-        z = inPoints[:, 2]
-
-        x_min, x_max = x_bounds
-        y_min, y_max = y_bounds
-
-        max_size = (x_max - x_min) * (y_max - y_min)
-
-        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
-        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
-
-        _raster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
-        np.maximum.at(_raster, (row_indices, col_indices), z)
-        _raster[_raster == -np.inf] = np.nan
-
-        # Identify forest gaps based on threshold
-        chm_layer = np.copy(_raster)
-        gaps = (chm_layer <= threshold).astype(int)
-
-        # Close the gaps to connect adjacent forest gaps
-        struct_element = generate_binary_structure(2, 2)
-        closed_gaps = binary_closing(gaps, structure=struct_element)
-
-        # Label each gap
-        labeled, num_features = label(closed_gaps)
-        filled_gaps = np.copy(chm_layer)
-        gap_mask = np.zeros(chm_layer.shape, dtype=bool)
-
-        for i in range(1, num_features + 1):
-            mask_window = labeled == i
-            # First dilation
-            boundary_1 = binary_dilation(mask_window, structure=struct_element)
-
-            # Second dilation
-            boundary_2 = binary_dilation(boundary_1, structure=struct_element)
-
-            # Third dilation
-            boundary_3 = binary_dilation(boundary_2, structure=struct_element)
-
-            # Now, get the three layers of boundaries by subtracting
-            buffered_boundary_3 = boundary_3 ^ boundary_2
-            buffered_boundary_2 = boundary_2 ^ boundary_1
-            buffered_boundary_1 = boundary_1 ^ mask_window
-
-            # If you want a single mask that combines all three boundary layers:
-            combined_boundary = buffered_boundary_1 | buffered_boundary_2 | buffered_boundary_3
-
-            surrounding_tree_mean = np.nanmax(chm_layer[combined_boundary])
-
-            gap_area = np.sum(mask_window) * resolution ** 2
-            if min_size <= gap_area <= max_size:
-                filled_gaps[mask_window] = surrounding_tree_mean
-                gap_mask[mask_window] = True
-
-
-
-
-        # The next step is to adjust the filled raster based on the filled gaps
-        mask_of_filled_gaps = np.array(~gap_mask, dtype=np.uint8)
-
-        # Compute distance to the nearest filled gap for each pixel and get the nearest filled gap value
-        distances, indices = distance_transform_edt(mask_of_filled_gaps, return_indices=True)
-        nearest_filled_gap_values = filled_gaps[tuple(indices)]
-
-        # Increase the heights of those pixels which are below their nearest filled gap
-        mask_to_increase = filled_gaps < nearest_filled_gap_values
-        filled_gaps[mask_to_increase] = nearest_filled_gap_values[mask_to_increase]
-
-        yy, xx = np.mgrid[y_max:y_min:-resolution, x_min:x_max:resolution]
-        out_array = np.vstack((xx.ravel(), yy.ravel(), filled_gaps.ravel())).T
-
-        return out_array
-
-
-
-    @staticmethod
-    def nanmean_filter(input_Array):
-        output_Array = np.nanmean(input_Array)
-        return output_Array
-
-    def get_DSM(self, input_points = None, voxelDownSampling = False, resolution = 1):
+    def get_DSM(self, input_points, x_bounds, y_bounds, resolution=1, threshold=10, min_size=10):
         # This function can do the interpolation based on given points
 
         # Parameters:
@@ -691,34 +498,50 @@ class StudyFieldLattice(UniformGrid):
         # |-resolution: define the resolution of the raster.
 
         # Return: export an interpolated Digital Surface Model.
-        if input_points is None:
-            _inAP = self._point_cloud
-        else:
-            _inAP = input_points
 
-        if voxelDownSampling:
-            TP_vd = self.voxelDownsampling(_inAP, resolution)
-        else:
-            TP_vd = _inAP
+        _DSM_ndarray = self.get_DSM_ndarray(input_points, x_bounds, y_bounds, resolution=resolution)
+
+        chm_layer = np.copy(_DSM_ndarray)
+        gaps = (chm_layer <= threshold).astype(int)
+
+        labeled, num_features = label(gaps)
+        filled_gaps = np.copy(chm_layer)
+        gap_mask = np.zeros(chm_layer.shape, dtype=bool)
+
+        struct_element = generate_binary_structure(2, 2)
+
+        for i in range(1, num_features + 1):
+            mask_window = labeled == i
+            boundary = binary_dilation(mask_window, structure=struct_element)
+            buffered_boundary = boundary ^ mask_window
+
+            surrounding_tree_mean = np.nanmax(chm_layer[buffered_boundary])
+            gap_area = np.sum(mask_window) * resolution ** 2
+            if min_size <= gap_area:
+                filled_gaps[mask_window] = surrounding_tree_mean
+                gap_mask[mask_window] = True
+
+        mask_of_filled_gaps = np.array(~gap_mask, dtype=np.uint8)
+        distances, indices = distance_transform_edt(mask_of_filled_gaps, return_indices=True)
+        nearest_filled_gap_values = filled_gaps[tuple(indices)]
+        mask_to_increase = filled_gaps < nearest_filled_gap_values
+        filled_gaps[mask_to_increase] = nearest_filled_gap_values[mask_to_increase]
+
+        self._DSM_filled_ndarray = filled_gaps + self._DTM_ndarray
+
+        x_coords = np.arange(x_bounds[0], x_bounds[1], resolution)
+        y_coords = np.arange(y_bounds[1], y_bounds[0], -resolution)
+
+        da_DSM = xr.DataArray(
+            data=self._DSM_filled_ndarray,
+            coords={"y": y_coords, "x": x_coords},
+            dims=["y", "x"]
+        )
+
+        self._DSM = da_DSM
 
 
-        self._DSM = self.p2m(self.interp_ByPoints(TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution))
-        dsmArray = self._DSM.values
-
-        arrayFilled = generic_filter(dsmArray, self.nanmean_filter, [5, 5])
-
-        self._DSM = xr.DataArray(arrayFilled, coords=self._DSM.coords, dims=self._DSM.dims, attrs=self._DSM.attrs)
-
-
-
-
-
-
-
-
-
-
-    def get_DTM(self, input_points=None, voxelDownSampling=False, resolution=1):
+    def get_DTM(self, input_points, x_bounds, y_bounds, resolution=1):
         # This function can do the interpolation based on given points
         # Parameters:
         # |-input_points: array, the input points' format is XYZ array. The function will run using the data derived from the parant class if its None.
@@ -726,22 +549,38 @@ class StudyFieldLattice(UniformGrid):
         # |-resolution: define the resolution of the raster.
 
         # Return: export an interpolated Digital Terrain Model.
-        if input_points is None:
-            _inTP = self._terrainPoints
-        else:
-            _inTP = input_points
+        x = input_points[:, 0]
+        y = input_points[:, 1]
+        z = input_points[:, 2]
 
-        if voxelDownSampling:
-            _TP_vd = self.voxelDownsampling(_inTP, resolution)
-        else:
-            _TP_vd = _inTP
+        x_min, x_max = x_bounds
+        y_min, y_max = y_bounds
 
-        self._DTM = self.p2m(self.interp_ByPoints(_TP_vd, voxelDownSampling=voxelDownSampling, resolution=resolution))
+        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
+        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
 
+        _DTMraster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
+        np.maximum.at(_DTMraster, (row_indices, col_indices), z)
+        _DTMraster[_DTMraster == -np.inf] = np.nan
 
+        coords_nan = np.argwhere(np.isnan(_DTMraster))
+        coords_not_nan = np.argwhere(~np.isnan(_DTMraster))
 
+        values_not_nan = _DTMraster[~np.isnan(_DTMraster)]
+        filledNan = interpolate.griddata(coords_not_nan, values_not_nan, coords_nan, method='nearest')
+        _DTMraster[np.isnan(_DTMraster)] = filledNan
+        self._DTM_ndarray = _DTMraster
 
+        x_coords = np.arange(x_min, x_max, resolution)
+        y_coords = np.arange(y_max, y_min, -resolution)
 
+        da = xr.DataArray(
+            data=_DTMraster,
+            coords={"y": y_coords, "x": x_coords},
+            dims=["y", "x"]
+        )
+
+        self._DTM = da
 
     @staticmethod
     def get_ValueByGivenPointsOnRasterMatrix(x, y, raster, method = "nearest"):
@@ -760,8 +599,6 @@ class StudyFieldLattice(UniformGrid):
 
         return da.data
 
-
-
 class dataInput(object):
 
     def __init__(self, filePath = None):
@@ -773,6 +610,3 @@ class dataInput(object):
     def read_VTK(self):
         _vtkR = pv.read(self.filePath)
         return _vtkR
-
-
-

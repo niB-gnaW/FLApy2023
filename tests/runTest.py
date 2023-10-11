@@ -11,5 +11,3 @@ siteLA.computeBatch(multiPro = 'p_map', CPU_count=6)
 
 siteLAH = fp.LAHanalysis.LAH_analysis(siteLA)
 siteLAH.computeLAH(save='/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/FineCal.vtk')
-
-a = 1
