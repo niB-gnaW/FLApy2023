@@ -74,6 +74,9 @@ class LAH_analysis(object):
         self._inGrid = self._inGridWraped
 
     def interpolation_3D(self, inGrid, fieldName = None):
+
+        print('\033[34m' + 'Wraping to the 3D SFL...' + '\033[0m')
+
         pts_SFL = inGrid.points
 
 
@@ -98,6 +101,13 @@ class LAH_analysis(object):
         tensorGrid.field_data['DTM'] = inGrid.field_data['DTM']
         tensorGrid.field_data['DEM'] = inGrid.field_data['DEM']
         tensorGrid.field_data['SFLset_resolution'] = inGrid.field_data['SFLset_resolution']
+
+        tensorGrid.field_data['PTS_cliped'] = inGrid.field_data['PTS_cliped']
+        tensorGrid.field_data['DTM_cliped'] = inGrid.field_data['DTM_cliped']
+        tensorGrid.field_data['DSM_cliped'] = inGrid.field_data['DSM_cliped']
+
+        tensorGrid.field_data['temPath'] = inGrid.field_data['temPath']
+        tensorGrid.field_data['OBS_Type'] = inGrid.field_data['OBS_Type']
 
         tensorGrid.add_field_data([str(inGrid.field_data['temPath'][0])], 'temPath')
 
@@ -127,6 +137,9 @@ class LAH_analysis(object):
         zNormed[zNormed < 0] = 0
         tensorGrid.cell_data['Z_normed'] = zNormed
         tensorGrid = tensorGrid.extract_cells(np.where(tensorGrid.cell_data['Classification'] == 1)[0])
+
+        print('\033[34m' + 'Wraping to the 3D SFL is done!' + '\033[0m')
+
         return tensorGrid
 
 
@@ -307,7 +320,7 @@ class LAH_analysis(object):
         self._inGrid.LAH_Hor_Gini = self.cal_Gini(_SVF_filterSet)
 
 
-    def cluster3D_Summary(self):
+    def cluster3D_Summary(self, limiterMin = 27):
         self._inGrid.set_active_scalars('Gi_Value')
         self._inGrid.compute_cell_sizes()
 
@@ -319,13 +332,13 @@ class LAH_analysis(object):
         _bodiesHot = _threshed_hotspot.split_bodies()
         _bodiesCold = _threshed_coldspot.split_bodies()
 
-
-
         sumStaHot = []
         sumStaSVFHot = []
+
+
         for hot_key in tqdm(_bodiesHot.keys(), desc = 'Calculating Hotspot Statistics', ncols=100,total=len(_bodiesHot.keys())):
             oneBody_h = _bodiesHot[hot_key]
-            if oneBody_h.n_cells > 8:
+            if oneBody_h.n_cells > limiterMin:
 
                 oneBody_h_volume = oneBody_h.n_cells * self.voxelVolume
                 oneBody_h_Surface = oneBody_h.extract_geometry()
@@ -341,7 +354,8 @@ class LAH_analysis(object):
         sumStaSVFCold = []
         for cold_key in tqdm(_bodiesCold.keys(), desc = 'Calculating Coldspot Statistics', ncols=100,total=len(_bodiesCold.keys())):
             oneBody_c = _bodiesCold[cold_key]
-            if oneBody_c.n_cells > 8:
+            if oneBody_c.n_cells > limiterMin:
+
                 oneBody_c_volume = oneBody_c.n_cells * self.voxelVolume
                 oneBody_c_Surface = oneBody_c.extract_geometry()
                 oneBody_c_area = oneBody_c_Surface.n_cells * self.voxelArea
@@ -431,7 +445,7 @@ class LAH_analysis(object):
 
         self._inGrid.cell_data['Gi_Value'] = _gi_star_list
         #self._inGrid.cell_data['Z_Value'] = self.calculate_z_values(_gi_star_list)
-        self._inGrid.save(self.tempSFL)
+        #self._inGrid.save(self.tempSFL)
 
     def calculate_z_values(self, G):
         mean_G = np.mean(G)
@@ -492,11 +506,11 @@ class LAH_analysis(object):
         print('Time for Gi_Value calculation: ', time.time() - time1, 's')
         self._inGrid.cell_data['Gi_Value'] = np.array(gi_star_valuesSet)
         #self._inGrid.cell_data['Z_Value'] = self.calculate_z_values(np.array(self._inGrid.cell_data['Gi_Value']))
-        self._inGrid.save(self.tempSFL)
+        #self._inGrid.save(self.tempSFL)
         print('Time for Gi_Value saving: ', time.time() - time1, 's')
 
 
-    def computeLAH(self, Voxel = True, Vertical = True, Horizontal = True, Cluster3D = True, save = None, thinning = 3):
+    def computeLAH(self, Voxel = True, Vertical = True, Horizontal = True, Cluster3D = True, save = None, thinning = 3, limit = 27):
 
         self._inGrid.LAH_Vox_average = 0
         self._inGrid.LAH_Vox_std = 0
@@ -535,21 +549,21 @@ class LAH_analysis(object):
         self._inGrid.LAH_3Dcluster_Cold_ShapeIndex = 0
 
         if Voxel is True:
-            print('\033[1;32;45m' + '----Calculating Voxel-scale Light Heterogeneity ...----' + '\033[0m')
+            print('\033[34m' + '----Calculating Voxel-scale Light Heterogeneity ...----' + '\033[0m')
             self.voxel_SummarySta(thinning=thinning)
 
         if Vertical is True:
-            print('\033[1;32;45m' + '----Calculating Vertical-scale Light Heterogeneity ...----' + '\033[0m')
+            print('\033[34m' + '----Calculating Vertical-scale Light Heterogeneity ...----' + '\033[0m')
             self.vertical_Summary()
 
         if Horizontal is True:
-            print('\033[1;32;45m' + '----Calculating Horizontal-scale Light Heterogeneity ...----' + '\033[0m')
+            print('\033[34m' + '----Calculating Horizontal-scale Light Heterogeneity ...----' + '\033[0m')
             self.horizontal_Summary()
 
         if Cluster3D is True:
-            print('\033[1;32;45m' + '----Calculating 3D-Cluster Light Heterogeneity ...----' + '\033[0m')
+            print('\033[34m' + '----Calculating 3D-Cluster Light Heterogeneity ...----' + '\033[0m')
             self.hotspotAnalysis_fast()
-            self.cluster3D_Summary()
+            self.cluster3D_Summary(limiterMin=limit)
 
         dataSet = {'Indicators': ['Average', 'Standard_deviation', 'Coefficient_of_variation', 'Range',
                                'Spatial_autocorrelation', 'Diversity', 'Gini_coefficient', 'Light_attenuation_rate',
@@ -655,7 +669,7 @@ class LAH_analysis(object):
         else:
             self._inGrid.save(save)
 
-        print('\033[32m---LAH calculation finished!!!' + '\033[0m')
+        print('\033[42;97m' + '!!!LAH calculation finished!!!' + '\033[0m')
         return self.indicatorCatalog
 
 

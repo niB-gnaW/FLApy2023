@@ -36,6 +36,19 @@ def vis_Raster(inRaster, resolution = 1):
 
     return plt.show()
 
+def vis_SFL(inSFL, field):
+    # The function is used to visualize the study field lattice
+    # inSFL: study field lattice, structured DataArray
+    # return: study field lattice visualization
+
+    dataSFL = inSFL
+    dataSFL.active_scalars_name = field
+
+    P = pv.Plotter()
+    P.add_mesh(dataSFL, cmap='viridis', show_scalar_bar=True)
+    P.show_grid()
+    return P.show()
+
 
 
 

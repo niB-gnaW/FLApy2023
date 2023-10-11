@@ -362,6 +362,10 @@ class StudyFieldLattice(UniformGrid):
         self._SFL.field_data['DSM'] = self.m2p(self._DSM)
         self._SFL.field_data['SFLset_resolution'] = self.spacing[0]
 
+        self._SFL.field_data['PTS_cliped'] = self._point_cloud_clipedByBbox
+        self._SFL.field_data['DTM_cliped'] = self.clip_Points(self.m2p(self._DTM), bbox)
+        self._SFL.field_data['DSM_cliped'] = self.clip_Points(self.m2p(self._DSM), bbox)
+
         self._SFL.add_field_data([self._obsType], 'OBS_Type')
         self._SFL.add_field_data([self.temPath], 'temPath')
 

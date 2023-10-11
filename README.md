@@ -43,9 +43,6 @@ import FLApy as fp
 
 site = fp.DataManagement.StudyFieldLattice()
 site.read_LasData('/your/path/to/point.las')    # Read point cloud data
-site.read_RasterData('/your/path/to/dsm.tif', 'DSM')    # These raster data are optional, but recommended to be provided, especially when the point cloud data is too big.
-site.read_RasterData('/your/path/to/dem.tif', 'DEM')
-site.read_RasterData('/your/path/to/dtm.tif', 'DTM')
 ```
 
 ### generate A Study-Field Lattice (SFL)
@@ -53,7 +50,7 @@ SFL is a data container for storing the information of each voxel in the study a
 `gen_SFL` is a function to generate the SFL. It needs a study area extent determined by `[min_X, max_X, min_Y, max_Y]`. 
 The `resolution` is the size of each voxel in the SFL. The unit is meter.
 ```
-site.gen_SFL([705501.9,705551.9,2715164.9,2715214.9], resolution=2)
+site.gen_SFL([xmin, xmax, ymin, ymax], resolution=1)
 ```
 
 ### Compute the Light Availability (LA) at voxels
@@ -61,15 +58,15 @@ The LA is calculated at each voxel in the SFL. The LA is calculated by the `LAca
 
 ```
 siteLA = fp.LAcalculator.LAcalculator(site)
-siteLA.computeBatch()
+siteLA.computeBatch(siteLA)
 ```
 
 ### 3D Light Availability Heterogeneity (LAH) analysis
 The LAH is calculated by the `LAH_calculator` class. The `field` is the LA field to be calculated.
+If the path of saving is not provided, the LAH will be saved in the same path of the SFL.
 ```
 siteLAH = fp.LAHanalysis.LAH_calculator(siteLA, field = 'SVF_flat')
-summary_result = siteLAH.computeLAH()
-summary_result
+siteLAH.computeLAH()
 ```
 
 ### Output
@@ -115,7 +112,8 @@ All support for calculation 3D-LAH indicator system.
 
 
 # Notation
-The FLApy package is developed by Bin Wang, Cameron Proctor, Zhenghua Sun, Luxiang Lin, Zhiming Zhang.
+The FLApy package is developed by Bin Wang (wb931022@hotmail.com)
+
 
 # Authors
 Bin Wang<sup>1, 2</sup>, Cameron Proctor<sup>2</sup>, Luxiang Lin<sup>3</sup>, Zhiming Zhang<sup>1</sup>
@@ -129,23 +127,27 @@ Author mail: wb931022@hotmail.com
 # Acknowledgements
 The FLApy package is developed by Bin Wang
 Cameron Proctor and Zhiming Zhang directed this project.
-Luxing Lin and Zhenhua Sun provided the guidance of the project.
+Luxing Lin and provided the guidance of the project.
 
 # Dependencies
 The FLApy package is developed based on Python 3.6.8 and the following packages:
-- numpy 1.21.2 (https://numpy.org/)
-- scipy 1.6.0 (https://www.scipy.org/)
-- matplotlib 3.7.1 (https://matplotlib.org/)
-- open3d 0.12.0 (http://www.open3d.org/)
-- pyvista 0.33.3 (https://docs.pyvista.org/)
-- PVGeo 2.1.0 (https://pvgeo.org/)
-- laspy 1.7.0 (https://laspy.readthedocs.io/en/latest/)
-- pandas 1.3.2 (https://pandas.pydata.org/)
-- tqdm 4.62.2 (https://tqdm.github.io/)
-- p_tqdm 1.4.0 (https://pypi.org/project/p-tqdm/)
-- miniball 1.1.0 (https://pypi.org/project/miniball/)
-- rasterio 1.2.6 (https://rasterio.readthedocs.io/en/latest/)
-- xarray 0.19.0 (https://xarray.pydata.org/en/stable/)
+- numpy 1.24.3
+- joblib 1.0.1
+- laspy 1.7.0
+- matplotlib 3.7.1
+- miniball 1.1.0
+- naturalneighbor 0.2.1
+- open3d 0.12.0
+- p_tqdm 1.4.0
+- pandas 1.3.2
+- PVGeo 2.1.0
+- pysheds 0.3.3
+- pyvista 0.33.3
+- rasterio 1.2.6
+- scipy 1.10.1
+- tqdm 4.62.2
+- vtk 9.0.1
+- xarray 0.19.0
 
 # Citation
 In submission.
