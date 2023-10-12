@@ -189,25 +189,28 @@ class LAcalculator(StudyFieldLattice):
         pointSizeRangeMax = max(pointSizeRangeSet)
         vegCBOed = inPoints - inObs
         vegCBOed = vegCBOed[vegCBOed[:, 2] > 0]
-        veg2sph_r, veg2sph_theta, veg2sph_phi = self.cart2sph(vegCBOed[:, 0], vegCBOed[:, 1], vegCBOed[:, 2])
-        veg2pol_rho, veg2pol_phi = self.sph2pol(veg2sph_theta, veg2sph_phi)
-        tx, ty = self.pol2cart(veg2pol_rho, veg2pol_phi)
-        datcart = np.column_stack((tx, ty))
-        gridCoordCellSize = np.abs(gridCoord[1][0]-gridCoord[0][0])
-        Dmin, Dmax = np.min(veg2sph_r), np.max(veg2sph_r)
-        position = (veg2sph_r - Dmin) / (Dmax - Dmin)
-        rmax = (pointSizeRangeMax / 2) * gridCoordCellSize
-        rmin = (pointSizeRangeMin / 2) * gridCoordCellSize
-        told = (((1 - position) * (rmax - rmin)) + rmin)
-        tree = KDTree(gridCoord)
-        pointsWithin = tree.query_ball_point(x=datcart, r=told)
-        indx = np.array(list(itertools.chain.from_iterable(pointsWithin)))
-        indx = np.unique(indx)
-        ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
-        ndx[indx] = True
-        imdx = np.reshape(ndx, image2ev.shape)
-        image2ev[imdx] = 0
-        self.vegCoverMap = image2ev
+        if len(vegCBOed) == 0:
+            self.vegCoverMap = image2ev
+        else:
+            veg2sph_r, veg2sph_theta, veg2sph_phi = self.cart2sph(vegCBOed[:, 0], vegCBOed[:, 1], vegCBOed[:, 2])
+            veg2pol_rho, veg2pol_phi = self.sph2pol(veg2sph_theta, veg2sph_phi)
+            tx, ty = self.pol2cart(veg2pol_rho, veg2pol_phi)
+            datcart = np.column_stack((tx, ty))
+            gridCoordCellSize = np.abs(gridCoord[1][0]-gridCoord[0][0])
+            Dmin, Dmax = np.min(veg2sph_r), np.max(veg2sph_r)
+            position = (veg2sph_r - Dmin) / (Dmax - Dmin)
+            rmax = (pointSizeRangeMax / 2) * gridCoordCellSize
+            rmin = (pointSizeRangeMin / 2) * gridCoordCellSize
+            told = (((1 - position) * (rmax - rmin)) + rmin)
+            tree = KDTree(gridCoord)
+            pointsWithin = tree.query_ball_point(x=datcart, r=told)
+            indx = np.array(list(itertools.chain.from_iterable(pointsWithin)))
+            indx = np.unique(indx)
+            ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
+            ndx[indx] = True
+            imdx = np.reshape(ndx, image2ev.shape)
+            image2ev[imdx] = 0
+            self.vegCoverMap = image2ev
         return image2ev
 
     def drawIn_terrain(self, inTerrain, inObs):
