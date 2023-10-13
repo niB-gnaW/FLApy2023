@@ -51,6 +51,9 @@ class LAH_analysis(object):
             self._valueImport = np.array(self._inGrid.field_data[fieldName])
             self._OBScoords = np.array(self._inGrid.field_data['OBS_SFL'])
 
+            #self._valueImport = np.array(self._inGrid.cell_data[fieldName])
+            #self._OBScoords = np.array(self._inGrid.cell_centers().points)
+
         elif self.__obsType == 2:
             self._valueImport = np.array(self._inGrid.field_data['Given_Value'][0])
             self._OBScoords = np.array(self._inGrid.field_data['Given_Obs'])

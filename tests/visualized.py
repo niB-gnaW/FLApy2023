@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 
 site = fp.DataManagement.dataInput('/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/SimForestStandardDis10Numtree100Sub05_FIN.vtk').read_VTK()
+fp.Visualization.vis_Figures(site, field='SVF_flat')
+'''''
 site.set_active_scalars('Gi_Value')
 hotspot = site.threshold(value=2.576, invert = False)
 coldspot = site.threshold(value=[-99998, -2.576])
@@ -24,6 +26,7 @@ P.add_mesh(coldspot, color='blue', opacity=0.5)
 #P.add_mesh(PTS, cmap='jet', show_scalar_bar=True)
 P.show_grid()
 P.show()
+'''''
 
 '''''
 DSM = site.field_data['DSM_cliped']

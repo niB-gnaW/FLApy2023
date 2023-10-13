@@ -49,7 +49,7 @@ def vis_SFL(inSFL, field):
     P.show_grid()
     return P.show()
 
-def vis_Figures(inSFL, field):
+def vis_Figures(inSFL, field = 'SVF_flat'):
     # The function is used to visualize the figures of LAH analysis
     # return: figures visualization
 
