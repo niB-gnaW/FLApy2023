@@ -94,7 +94,8 @@ class LAH_analysis(object):
         tensorGrid.origin = (Xmin, Ymin, Zmin)
         tensorGrid.spacing = (resolutionGrid, resolutionGrid, resolutionGrid)
         tensorGrid.cell_data[fieldName] = inter.flatten(order='F')
-
+        tensorGrid.field_data[str(fieldName + '_full')] = inter.flatten(order='F')
+        tensorGrid.field_data[fieldName] = inter.flatten(order='F')
         tensorGrid.field_data['PTS'] = inGrid.field_data['PTS']
         tensorGrid.field_data['OBS_SFL'] = inGrid.field_data['OBS_SFL']
         tensorGrid.field_data['DSM'] = inGrid.field_data['DSM']
@@ -136,6 +137,8 @@ class LAH_analysis(object):
         zNormed = tensorGridCenterPts[:, 2] - daquery.data
         zNormed[zNormed < 0] = 0
         tensorGrid.cell_data['Z_normed'] = zNormed
+        tensorGrid.field_data['Z_normed_full'] = zNormed
+
         tensorGrid = tensorGrid.extract_cells(np.where(tensorGrid.cell_data['Classification'] == 1)[0])
 
         print('\033[34m' + 'Wraping to the 3D SFL is done!' + '\033[0m')
@@ -265,11 +268,11 @@ class LAH_analysis(object):
     def vertical_Summary(self):
         time1 = time.time()
         print('Calculating Vertical Light Attenuation ...')
-        relativeHeight = np.array(self._inGrid.cell_data['Z_normed'])
+        relativeHeight = np.array(self._inGrid.field_data['Z_normed_full'])
 
         relativeHeight[relativeHeight < 0] = 0
         relativeHeight = relativeHeight
-        _SVF = self.normalize_array(self._value)
+        _SVF = self.normalize_array(self._inGrid.field_data[str(self.fieldName + '_full')])
 
         #_p0 = [np.max(_SVF), np.median(relativeHeight), 1, np.min(_SVF)]
         #_params, _params_covariance = curve_fit(sigmoid_func2, relativeHeight, _SVF, _p0, maxfev=99999)
