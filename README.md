@@ -84,7 +84,7 @@ The module contains the following functions:
 ```
 fp.Visualization.vis_Figures(siteLAH)
 ```
-
+![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/Figure.png)
 
 ### LAH indicators
 All support for calculation 3D-LAH indicator system.
