@@ -307,13 +307,14 @@ class StudyFieldLattice(UniformGrid):
             print('\033[35mDEM has not been read or constructed. FLApy will generate automatically. The DEM will be used as DEM due to no DEM detected.\033[0m')
             self._DEM = self._DTM
 
-        self._DSMp = pv.PolyData(self.m2p(self._DSM))
-        self._DTMp = pv.PolyData(self.m2p(self._DTM))
-
+        self._DSMp = self.m2p(self._DSM)
+        self._DSMp = self._DSMp[~np.isnan(self._DSMp[:, 2])]
+        self._DTMp = self.m2p(self._DTM)
+        self._DTMp = self._DTMp[~np.isnan(self._DTMp[:, 2])]
 
         self._SFL = CreateUniformGrid(origin=self.origin, spacing=self.spacing, extent=self.dimensions).apply()
-        ext_dtm = ExtractTopography(invert=True).apply(self._SFL, self._DTMp)
-        ext_dsm = ExtractTopography(invert=False).apply(self._SFL, self._DSMp)
+        ext_dtm = ExtractTopography(invert=True).apply(self._SFL, pv.PolyData(self._DTMp))
+        ext_dsm = ExtractTopography(invert=False).apply(self._SFL, pv.PolyData(self._DSMp))
         ext_merge = ext_dsm.cell_data['Extracted'] * ext_dtm.cell_data['Extracted']
         self._SFL.cell_data['Classification'] = ext_merge
 
@@ -394,8 +395,8 @@ class StudyFieldLattice(UniformGrid):
         y_centers = yy + udYSpacing / 2
         x_centers = x_centers.ravel()
         y_centers = y_centers.ravel()
-        z_centersDSM = self.get_ValueByGivenPointsOnRasterMatrix(x_centers.ravel(), y_centers.ravel(), self.DSM)
-        z_centersDTM = self.get_ValueByGivenPointsOnRasterMatrix(x_centers.ravel(), y_centers.ravel(), self.DTM)
+        z_centersDSM = self.get_ValueByGivenPointsOnRasterMatrix(x_centers.ravel(), y_centers.ravel(), self.DSM).T
+        z_centersDTM = self.get_ValueByGivenPointsOnRasterMatrix(x_centers.ravel(), y_centers.ravel(), self.DTM).T
 
         total_points = len(np.arange(xOrigin, xEnd, udXSpacing)) * len(np.arange(yOrigin, yEnd, udYSpacing)) * udZNum
         obsGen = np.zeros((total_points, 3))
@@ -478,10 +479,17 @@ class StudyFieldLattice(UniformGrid):
         x_min, x_max = x_bounds
         y_min, y_max = y_bounds
 
-        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
-        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
+        rows = int((y_max - y_min) / resolution)
+        cols = int((x_max - x_min) / resolution)
+
+        x_coords = np.linspace(x_min, x_max - resolution, cols)
+        y_coords = np.linspace(y_max - resolution, y_min, rows)
 
         _DSMraster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
+
+        col_indices = np.digitize(x, x_coords) - 1
+        row_indices = np.digitize(y, y_coords[::-1]) - 1
+
         np.maximum.at(_DSMraster, (row_indices, col_indices), z)
         _DSMraster[_DSMraster == -np.inf] = np.nan
 
@@ -491,7 +499,7 @@ class StudyFieldLattice(UniformGrid):
         values_not_nan = _DSMraster[~np.isnan(_DSMraster)]
         filledNan = interpolate.griddata(coords_not_nan, values_not_nan, coords_nan, method='nearest')
         _DSMraster[np.isnan(_DSMraster)] = filledNan
-        return _DSMraster
+        return _DSMraster, x_coords, y_coords
 
     def get_DSM(self, input_points, x_bounds, y_bounds, resolution=1, threshold=10, min_size=10):
         # This function can do the interpolation based on given points
@@ -503,7 +511,7 @@ class StudyFieldLattice(UniformGrid):
 
         # Return: export an interpolated Digital Surface Model.
 
-        _DSM_ndarray = self.get_DSM_ndarray(input_points, x_bounds, y_bounds, resolution=resolution)
+        _DSM_ndarray, x_coords, y_coords = self.get_DSM_ndarray(input_points, x_bounds, y_bounds, resolution=resolution)
 
         chm_layer = np.copy(_DSM_ndarray)
         gaps = (chm_layer <= threshold).astype(int)
@@ -533,9 +541,6 @@ class StudyFieldLattice(UniformGrid):
 
         self._DSM_filled_ndarray = filled_gaps + self._DTM_ndarray
 
-        x_coords = np.arange(x_bounds[0], x_bounds[1], resolution)
-        y_coords = np.arange(y_bounds[1], y_bounds[0], -resolution)
-
         da_DSM = xr.DataArray(
             data=self._DSM_filled_ndarray,
             coords={"y": y_coords, "x": x_coords},
@@ -560,10 +565,17 @@ class StudyFieldLattice(UniformGrid):
         x_min, x_max = x_bounds
         y_min, y_max = y_bounds
 
-        col_indices = np.digitize(x, np.arange(x_min, x_max, resolution)) - 1
-        row_indices = np.digitize(y, np.arange(y_max, y_min, -resolution)) - 1
+        rows = int((y_max - y_min) / resolution)
+        cols = int((x_max - x_min) / resolution)
+
+        x_coords = np.linspace(x_min, x_max - resolution, cols)
+        y_coords = np.linspace(y_max - resolution, y_min, rows)
 
         _DTMraster = np.full((int((y_max - y_min) / resolution), int((x_max - x_min) / resolution)), -np.inf)
+
+        col_indices = np.digitize(x, x_coords) - 1
+        row_indices = np.digitize(y, y_coords[::-1]) - 1
+
         np.maximum.at(_DTMraster, (row_indices, col_indices), z)
         _DTMraster[_DTMraster == -np.inf] = np.nan
 
@@ -575,8 +587,6 @@ class StudyFieldLattice(UniformGrid):
         _DTMraster[np.isnan(_DTMraster)] = filledNan
         self._DTM_ndarray = _DTMraster
 
-        x_coords = np.arange(x_min, x_max, resolution)
-        y_coords = np.arange(y_max, y_min, -resolution)
 
         da = xr.DataArray(
             data=_DTMraster,

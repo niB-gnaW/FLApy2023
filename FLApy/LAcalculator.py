@@ -198,7 +198,10 @@ class LAcalculator(StudyFieldLattice):
             datcart = np.column_stack((tx, ty))
             gridCoordCellSize = np.abs(gridCoord[1][0]-gridCoord[0][0])
             Dmin, Dmax = np.min(veg2sph_r), np.max(veg2sph_r)
-            position = (veg2sph_r - Dmin) / (Dmax - Dmin)
+            if Dmin == Dmax:
+                position = 0
+            else:
+                position = (veg2sph_r - Dmin) / (Dmax - Dmin)
             rmax = (pointSizeRangeMax / 2) * gridCoordCellSize
             rmin = (pointSizeRangeMin / 2) * gridCoordCellSize
             told = (((1 - position) * (rmax - rmin)) + rmin)
@@ -207,11 +210,15 @@ class LAcalculator(StudyFieldLattice):
             indx = np.array(list(itertools.chain.from_iterable(pointsWithin)))
             indx = np.unique(indx)
             ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
-            ndx[indx] = True
-            imdx = np.reshape(ndx, image2ev.shape)
-            image2ev[imdx] = 0
-            self.vegCoverMap = image2ev
-        return image2ev
+
+            if len(indx) == 0:
+                self.vegCoverMap = image2ev
+            else:
+                ndx[indx] = True
+                imdx = np.reshape(ndx, image2ev.shape)
+                image2ev[imdx] = 0
+                self.vegCoverMap = image2ev
+        return self.vegCoverMap
 
     def drawIn_terrain(self, inTerrain, inObs):
         # Draw the terrain.
@@ -389,8 +396,9 @@ def update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoo
         return ndx
 
     else:
+        from tqdm import tqdm
 
-        for idx in range(bins):
+        for idx in tqdm(range(bins)):
             tbinMin = np.deg2rad(-180) + np.deg2rad(idx)
             tbinMax = np.deg2rad(-180) + np.deg2rad(idx + 1)
             keptPointsRho = ter2pol_rho[(ter2sph_phi >= tbinMin) & (ter2sph_phi < tbinMax)]
@@ -400,6 +408,9 @@ def update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoo
             else:
                 Aloop = 2
                 while len(keptPointsRho) == 0:
+                    if Aloop > bins:
+                        keptPointsRho = 0
+                        break
                     tbinMax = np.deg2rad(-180) + np.deg2rad(idx + Aloop)
                     keptPointsRho = ter2pol_rho[(ter2sph_phi >= tbinMin) & (ter2sph_phi < tbinMax)]
                     Aloop = Aloop + 1
