@@ -6,7 +6,7 @@ with open('README.md', 'r') as fh:
 
 setup(
     name='FLApy',
-    version='1.131',
+    version='1.133',
     description='Forest Light availability heterogeneity Analysis in Python',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -22,9 +22,9 @@ setup(
                       'scipy==1.6.0',
                       'matplotlib',
                       'open3d',
-                      'pyvista',
+                      'pyvista==0.33.3',
                       'PVGeo',
-                      'laspy==1.7.0',
+                      'laspy',
                       'pandas',
                       'tqdm',
                       'p_tqdm',
@@ -32,7 +32,8 @@ setup(
                       'rasterio',
                       'xarray==0.19.0',
                       'joblib',
-                      'pdal'],
+                      'SALib',
+                      ],
     dependency_links=['file:dependencies/naturalneighbor-0.2.1-cp38-cp38-win_amd64.whl'],
 )
 

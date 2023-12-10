@@ -10,7 +10,7 @@ import os
 import miniball
 import time
 import open3d as o3d
-import matplotlib.pyplot as plt
+
 
 from scipy.optimize import curve_fit
 from scipy.spatial import ConvexHull
@@ -18,7 +18,6 @@ from scipy.stats import entropy
 from scipy.spatial import KDTree
 from sklearn.neighbors import NearestNeighbors
 from PVGeo.grids import ExtractTopography
-from joblib import Parallel, delayed
 from tqdm import tqdm
 
 
@@ -56,11 +55,11 @@ class LAH_analysis(object):
 
 
         if self.__obsType == 0 or self.__obsType == 1 or self.__obsType == 3:
-            #self._valueImport = np.array(self._inGrid.field_data[fieldName])
-            #self._OBScoords = np.array(self._inGrid.field_data['OBS_SFL'])
+            self._valueImport = np.array(self._inGrid.field_data[fieldName])
+            self._OBScoords = np.array(self._inGrid.field_data['OBS_SFL'])
 
-            self._valueImport = np.array(self._inGrid.cell_data[fieldName])
-            self._OBScoords = np.array(self._inGrid.cell_centers().points)
+            #self._valueImport = np.array(self._inGrid.cell_data[fieldName])
+            #self._OBScoords = np.array(self._inGrid.cell_centers().points)
 
         elif self.__obsType == 2:
             self._valueImport = np.array(self._inGrid.field_data['Given_Value'])
@@ -120,9 +119,9 @@ class LAH_analysis(object):
         tensorGrid.field_data['DEM'] = inGrid.field_data['DEM']
         tensorGrid.field_data['SFLset_resolution'] = inGrid.field_data['SFLset_resolution']
         tensorGrid.field_data['coords_full'] = np.array(tensorGrid.cell_centers().points)
-        #tensorGrid.field_data['PTS_cliped'] = inGrid.field_data['PTS_cliped']
-        #tensorGrid.field_data['DTM_cliped'] = inGrid.field_data['DTM_cliped']
-        #tensorGrid.field_data['DSM_cliped'] = inGrid.field_data['DSM_cliped']
+        tensorGrid.field_data['PTS_cliped'] = inGrid.field_data['PTS_cliped']
+        tensorGrid.field_data['DTM_cliped'] = inGrid.field_data['DTM_cliped']
+        tensorGrid.field_data['DSM_cliped'] = inGrid.field_data['DSM_cliped']
 
         tensorGrid.field_data['temPath'] = inGrid.field_data['temPath']
         tensorGrid.field_data['OBS_Type'] = inGrid.field_data['OBS_Type']
