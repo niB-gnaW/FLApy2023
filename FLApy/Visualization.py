@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-#---------------------------------------------------------------------#
-#   FLApy: Forest Light Analyzer python package                       #
-#   Developer: Wang Bin (Yunnan University, Kunming, China)           #
+
 import numpy as np
 import pyvista as pv
 import matplotlib.pyplot as plt
@@ -29,6 +27,9 @@ def vis_Raster(inRaster, resolution = 1):
     # inRaster: raster data, numpy array
     # return: raster data visualization
 
+    if inRaster is None:
+        raise ValueError('Raster data is empty!')
+
     if isinstance(inRaster, np.ndarray):
         dataP2M = DataManagement.StudyFieldLattice.p2m(inRaster, resolution)
     elif isinstance(inRaster, xr.DataArray):
@@ -37,13 +38,14 @@ def vis_Raster(inRaster, resolution = 1):
     dataP2M.plot()
     return plt.show()
 
-def vis_SFL(inSFL, field):
+def vis_SFL(inSFL, field = 'SVF_flat'):
     # The function is used to visualize the study field lattice
     # inSFL: study field lattice, structured DataArray
     # return: study field lattice visualization
 
     dataSFL = inSFL
     dataSFL.active_scalars_name = field
+    dataSFL.set_active_scalars(field)
     P = pv.Plotter()
     P.add_mesh(dataSFL, cmap='viridis', show_scalar_bar=True)
     P.show_grid()
