@@ -71,7 +71,8 @@ The LAH is calculated by the `LAH_calculator` class. The `field` is the LA field
 If the path of saving is not provided, the LAH will be saved in the same path of the SFL.
 ```
 siteLAH = fp.LAHanalysis.LAH_calculator(siteLA)
-siteLAH.computeLAH()
+results = siteLAH.com_allLAH()
+print(results)
 ```
 
 ### Visualization
@@ -103,6 +104,8 @@ All support for calculation 3D-LAH indicator system.
 |          Convex_hull_area           |  Vertical  |   ACH_Ver    |
 |               Average               | Horizontal |   AVE_Hor    |
 |         Standard_deviation          | Horizontal |   STD_Hor    |
+|            Height of max Standard deviation                         |Horizontal|  STDmh_Hor   |
+|                   Relative height of max Standard deviation                  |Horizontal|  STDmhr_Hor  |
 |      Coefficient_of_variation       | Horizontal |    CV_Hor    |
 |                Range                | Horizontal |   RAN_Hor    |
 |       Spatial_autocorrelation       | Horizontal |   SAC_Hor    |
@@ -121,8 +124,8 @@ All support for calculation 3D-LAH indicator system.
 |         Cold_volume_average         | 3D_Cluster |    CVA_3D    |
 |            Hot_cohesion             | 3D_Cluster |    HCO_3D    |
 |            Cold_cohesion            | 3D_Cluster |    CCO_3D    |
-|          Hot_shape_factor           | 3D_Cluster |    HSF_3D    |
-|          Cold_shape_factor          | 3D_Cluster |    CSF_3D    |
+|          Hotspot related circumscribing sphere           | 3D_Cluster |    HCC_3D    |
+|          Coldspot related circumscribing sphere          | 3D_Cluster |    CCC_3D    |
 |           Hot_shape_index           | 3D_Cluster |    HSI_3D    |
 |          Cold_shape_index           | 3D_Cluster |    CSI_3D    |
 
@@ -132,15 +135,30 @@ The FLApy package is developed by Bin Wang (wb931022@hotmail.com)
 
 
 # Authors
-Bin Wang<sup>1, 2</sup>, Cameron Proctor<sup>2</sup>, Luxiang Lin<sup>3</sup>, Zhiming Zhang<sup>1</sup>
+Bin Wang<sup>1, 2</sup>,
+Cameron Proctor<sup>2</sup>,
+Zhiliang Yao<sup>3, 4</sup>,
+Ninglv Li<sup>1</sup>,
+Qifei Chen<sup>1</sup>,
+Zhaoyu Zhou<sup>1</sup>,
+Weihong Liu<sup>1</sup>,
+Yufeng Ma<sup>1</sup>,
+Zimu Wang<sup>1</sup>,
+Zhihao Wang<sup>1</sup>,
+Luxiang Lin<sup>3, 5</sup>
 
-1. Institute of Ecology and Geobotany, School of Ecology and Environmental Science, Yunnan University, Kunming 650091, China
+1. School of Ecology and Environmental Sciences, Yunnan University, Kunming, 650500, China
 2. School of the Environment, University of Windsor, Windsor, N9B 3P4, Canada
-3. Key Laboratory of Tropical Forest Ecology, Xishuangbanna Tropical Botanical Garden, Chinese Academy of Sciences, Menglun 666303, China
+3. CAS Key Laboratory of Tropical Forest Ecology, Xishuangbanna Tropical Botanical Garden, Chinese Academy of Sciences, Kunming, China
+4. University of Chinese Academy of Sciences, Beijing, China
+5. National Forest Ecosystem Research Station at Xishuangbanna, Mengla, Yunnan, China
 
-Author mail: wb931022@hotmail.com
+Author mail: wb931022@hotmail.com; zzming76@ynu.edu.cn
 
 # Acknowledgements
+This research is supported by the National Natural Science Foundation of China (32260291), The Second Tibetan Plateau Scientific Expedition and Research (STEP) program (2019QZKK0308), and the Joint Fund of the National Natural Science Foundation of China-Yunnan Province (U1902203). In addition, it has received strong support from The Project for Talent and Platform of Science and Technology in Yunnan Province Science and Technology Department (202205AM070005), the Major Program for Basic Research Project of Yunnan Province (202101BC070002) and the Key Research and Development Program of Yunnan Province (No. 202303AC100009). We also thank the Ailao Mountain Nature Reserve Ecological Station for field work support, and the Southeast Asian Biodiversity Institute (151C53KYSB20200019) for laboratory platforms. Besides, we acknowledge the support of the Natural Sciences and Engineering Research Council of Canada (NSERC, RGPIN-2022-04861). Finally, we would like to express our sincere thanks to Prof. Jiajia Liu of Fudan University, Prof. Hans De Boeck of the University of Antwerp, and Dr. Suhui Ma and Dr. Chuanbao Jing of Yunnan University for their valuable suggestions and guidance on the writing of this work.
+
+# Authors' contributions
 - The FLApy package is developed by Bin Wang
 - Cameron Proctor and Zhiming Zhang directed this project.
 - Luxing Lin and provided the guidance of the project.
