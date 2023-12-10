@@ -9,8 +9,6 @@ import numpy as np
 import xarray as xr
 import open3d as o3d
 import laspy
-import pdal
-import json
 
 from pyvista.core.grid import UniformGrid
 from PVGeo.model_build import CreateUniformGrid
@@ -132,10 +130,6 @@ class StudyFieldLattice(UniformGrid):
 
 
             self._point_cloud = np.vstack((X_Pcfin, Y_Pcfin, Z_Pcfin)).transpose()
-        else:
-            print(
-                '\033[35mNo points classified as ground in the las file. FLApy will automatically classify the imported data for ground points.  \033[0m')
-            self.classify_groundPoints(filePath, srs)
 
         classificationTP = lasRead.classification == 2
         self._terrainPoints = self._point_cloud[classificationTP]
@@ -713,42 +707,6 @@ class StudyFieldLattice(UniformGrid):
         da = raster.sel(x=tgt_x, y=tgt_y, method=method)
 
         return da.data
-
-
-    def classify_groundPoints(self, filePath, srs = None):
-        # This function is used to classify the ground points automatically.
-        # Parameters:
-        #   filePath: the path of the las file.
-        #   srs: the spatial reference system of the las file.
-
-        if srs is None:
-            nosrs = True
-        outputFilePath = filePath.replace('.las', '_classified.las')
-        pipeline_dict = {
-            "pipeline": [
-                {
-                    "type": "readers.las",
-                    "filename": filePath,
-                    "nosrs": nosrs
-                },
-                {
-                    "type": "filters.smrf",
-                    "ignore": "Classification[7:7]",
-                    "scalar": 1.25,
-                    "slope": 0.2,
-                    "threshold": 0.45,
-                    "window": 16.0
-                },
-                {
-                    "type": "writers.las",
-                    "filename": outputFilePath
-                }
-            ]
-        }
-        pipeline_json = json.dumps(pipeline_dict)
-        pipeline = pdal.Pipeline(pipeline_json)
-        pipeline.execute()
-        self.read_LasData(outputFilePath)
 
 
     @staticmethod

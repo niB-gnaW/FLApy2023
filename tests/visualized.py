@@ -8,9 +8,9 @@ import xarray as xr
 import matplotlib.gridspec as grd
 import matplotlib.ticker as ticker
 
-site1 = fp.DataManagement.dataInput('/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/SimForestStandardDis10Numtree100Sub05_FIN.vtk').read_VTK()
-site2 = fp.DataManagement.dataInput('/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/SimForestStandardDis10Numtree200Sub05_FIN.vtk').read_VTK()
-site3 = fp.DataManagement.dataInput('/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/SimForestStandardDis10Numtree300Sub05_FIN.vtk').read_VTK()
+site1 = fp.DataManagement.dataInput('/Volumes/WangBinSSD/FLApy2023/FLApy2023/studyCase1/sub05_0499_LAHfin.vtk').read_VTK()
+site2 = fp.DataManagement.dataInput('/Volumes/WangBinSSD/FLApy2023/FLApy2023/studyCase1/sub05_0703_LAHfin.vtk').read_VTK()
+site3 = fp.DataManagement.dataInput('/Volumes/WangBinSSD/FLApy2023/FLApy2023/studyCase1/sub05_0902_LAHfin.vtk').read_VTK()
 
 dataYsite1 = site1['SVF_flat']
 dataXsite1 = site1['Z_normed']
@@ -46,9 +46,9 @@ site2Color = '#F45581'
 site3Color = '#569426'
 
 ax1 = plt.subplot(gs[0, 0])
-sns.kdeplot((dataYsite1 * 100), shade = True, common_norm = True, color = site1Color)
-sns.kdeplot((dataYsite2 * 100), shade = True, common_norm = True, color = site2Color)
-sns.kdeplot((dataYsite3 * 100), shade = True, common_norm = True, color = site3Color)
+sns.kdeplot((dataYsite1 * 100), shade = True, common_norm = True, color = site1Color, lw=2)
+sns.kdeplot((dataYsite2 * 100), shade = True, common_norm = True, color = site2Color, lw=2)
+sns.kdeplot((dataYsite3 * 100), shade = True, common_norm = True, color = site3Color, lw=2)
 ax1.set_xlabel('LA (%)')
 ax1.set_xlim(0, 100)
 
@@ -67,11 +67,11 @@ Y_vertical_site3 = site3.field_data['SVF_flat_full'] * 100
 x_range_site3 = np.linspace(0, np.max(X_vertical_site3), 100)
 _params_site3 = [site3.field_data['LAR_Ver'], site3.field_data['HIP_Ver']]
 
-sns.scatterplot(y = X_vertical_site1, x = Y_vertical_site1, alpha=0.01, edgecolor='none', s = 1, color = site1Color)
+#sns.scatterplot(y = X_vertical_site1, x = Y_vertical_site1, alpha=0.01, edgecolor='none', s = 1, color = site1Color)
 sns.lineplot(y = x_range_site1, x = fp.LAHanalysis.sigmoid_func(x_range_site1, *_params_site1), color = site1Color, lw=2)
-sns.scatterplot(y = X_vertical_site2, x = Y_vertical_site2, alpha=0.01, edgecolor='none', s = 1, color = site2Color)
+#sns.scatterplot(y = X_vertical_site2, x = Y_vertical_site2, alpha=0.01, edgecolor='none', s = 1, color = site2Color)
 sns.lineplot(y = x_range_site2, x = fp.LAHanalysis.sigmoid_func(x_range_site2, *_params_site2), color = site2Color, lw=2)
-sns.scatterplot(y = X_vertical_site3, x = Y_vertical_site3, alpha=0.01, edgecolor='none', s = 1, color = site3Color)
+#sns.scatterplot(y = X_vertical_site3, x = Y_vertical_site3, alpha=0.01, edgecolor='none', s = 1, color = site3Color)
 sns.lineplot(y = x_range_site3, x = fp.LAHanalysis.sigmoid_func(x_range_site3, *_params_site3), color = site3Color, lw=2)
 
 ax2.yaxis.tick_right()
@@ -85,9 +85,9 @@ Y_horizontal_site1 = (dataYsite1[np.abs(dataXsite1 - 1.5) <= 0.5]) * 100
 Y_horizontal_site2 = (dataYsite2[np.abs(dataXsite2 - 1.5) <= 0.5]) * 100
 Y_horizontal_site3 = (dataYsite3[np.abs(dataXsite3 - 1.5) <= 0.5]) * 100
 
-sns.kdeplot(Y_horizontal_site1, shade=True, common_norm = True, color = site1Color)
-sns.kdeplot(Y_horizontal_site2, shade=True, common_norm = True, color = site2Color)
-sns.kdeplot(Y_horizontal_site3, shade=True, common_norm = True, color = site3Color)
+sns.kdeplot(Y_horizontal_site1, shade=True, common_norm = True, color = site1Color, lw=2)
+sns.kdeplot(Y_horizontal_site2, shade=True, common_norm = True, color = site2Color, lw=2)
+sns.kdeplot(Y_horizontal_site3, shade=True, common_norm = True, color = site3Color, lw=2)
 ax3.set_xlabel('LA (%)')
 ax3.set_xlim(0, 30)
 ax3.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.2f}"))
@@ -142,7 +142,7 @@ ax4.get_legend().remove()
 
 
 plt.show()
-fig.savefig('/Users/wangbin/PythonSpace/PythonEX/FLApy/FLApy2023/tests/fig2.png', dpi=300, bbox_inches='tight')
+fig.savefig('/Users/wangbin/Documents/文章/准备中的文章/FLApy/Data/2023/Pics/Figure4sub1.png', dpi=300, bbox_inches='tight')
 
 
 

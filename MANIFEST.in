@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include dependencies *
+recursive-exclude tests *
+recursive-exclude hemipy *
