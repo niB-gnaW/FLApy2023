@@ -6,7 +6,7 @@ with open('README.md', 'r') as fh:
 
 setup(
     name='FLApy',
-    version='1.16',
+    version='1.3.0',
     description='Forest Light availability heterogeneity Analysis in Python',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -35,6 +35,7 @@ setup(
                       'scikit-learn',
                       'seaborn',
                       'vtk==9.0.1',
+                      'pytest',
                       ],
 )
 
