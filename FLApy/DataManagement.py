@@ -102,7 +102,7 @@ class StudyFieldLattice(UniformGrid):
         infile_OBS = self.read_CsvData(filePath)
         setattr(self, 'OBS_data', infile_OBS)
 
-    def read_LasData(self, filePath, srs = None):
+    def read_LasData(self, filePath):
         # This function is used to read the point cloud data from a las file.
         # If the las file contains the ground points, the function will automatically classify the ground points.
         # Parameters:
