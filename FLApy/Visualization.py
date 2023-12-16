@@ -9,6 +9,7 @@ import seaborn as sns
 import matplotlib.gridspec as grd
 import FLApy as fp
 import matplotlib.ticker as ticker
+import os
 
 from FLApy import DataManagement
 
@@ -55,14 +56,32 @@ def vis_Figures(inSFL, field = 'SVF_flat'):
     # The function is used to visualize the figures of LAH analysis
     # return: figures visualization
 
-    dataSFL = inSFL
-    dataSFL.active_scalars_name = field
+    if inSFL is None:
+        raise ValueError('Study field lattice is empty!')
 
-    dataY = dataSFL[field]
-    dataX = dataSFL['Z_normed']
+    else:
+
+        if isinstance(inSFL, str) is True:
+            if os.path.exists(inSFL) is False:
+                raise ValueError('Study field lattice is empty!')
+            else:
+                dataSFL = DataManagement.dataInput(inSFL).read_VTK()
+
+        else:
+            if hasattr(inSFL, '_SFL') is True:
+                dataSFL = inSFL._SFL
+            elif hasattr(inSFL, '_DataContainer') is True:
+                dataSFL = inSFL._DataContainer
+            elif hasattr(inSFL, '_inGrid') is True:
+                dataSFL = inSFL._inGrid
+            elif hasattr(inSFL, '_SFL') is False and hasattr(inSFL, '_DataContainer') is False and hasattr(inSFL, '_inGrid') is False:
+                dataSFL = inSFL
+
+    dataY = dataSFL.cell_data[field]
+    dataX = dataSFL.cell_data['Z_normed']
 
 
-    fig = plt.figure()
+    plt.figure()
     gs = grd.GridSpec(2, 2, width_ratios=[1, 1], height_ratios=[1, 1], hspace=0.3, wspace=0.1)
 
     ax1 = plt.subplot(gs[0, 0])

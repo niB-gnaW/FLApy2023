@@ -484,7 +484,7 @@ class LAH_analysis(object):
 
 
 
-        if givenHeight is not None and len(givenHeight) == 1:
+        if givenHeight is not None and isinstance(givenHeight, float):
             _Zflat = np.full(len(_Xflat), givenHeight)
             _queryPoints = np.vstack((_Xflat, _Yflat, _Zflat)).transpose()
             _, idx = _kdTreeNorm.query(_queryPoints, k=1)
@@ -503,7 +503,7 @@ class LAH_analysis(object):
 
 
 
-        if givenHeight is not None and len(givenHeight) > 1:
+        if givenHeight is not None and isinstance(givenHeight, list):
             LHA = []
             LHS = []
             LHC = []
