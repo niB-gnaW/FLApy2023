@@ -29,7 +29,7 @@ setup(
                       'p_tqdm',
                       'miniball',
                       'rasterio',
-                      'xarray==0.19.0',
+                      'xarray==2023.12.0',
                       'joblib',
                       'SALib',
                       'scikit-learn',
