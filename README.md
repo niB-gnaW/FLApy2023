@@ -1,6 +1,8 @@
 ![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/logo.png)
 # Forest Light Analyzer Python package: FLApy 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/FLApy?label=Downloads&style=flat-square)
+![Codecov](https://img.shields.io/codecov/c/github/niB-gnaW/FLApy2023)
+
 
 ## General description
 Forest Light Analyzer python package (FLApy) is a python package for assessing

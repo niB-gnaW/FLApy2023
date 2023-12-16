@@ -23,7 +23,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest tests/ --cov=FLAPy --cov-report=xml
+        pytest --cov=FLAPy tests/ --cov-report=xml
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v3
