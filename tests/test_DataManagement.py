@@ -4,7 +4,7 @@ import os
 import pytest
 import numpy as np
 import xarray as xr
-import random
+
 
 def download_file(url, local_filename):
     with requests.get(url, stream=True) as r:
@@ -32,8 +32,8 @@ def demo_data_raster():
 
 @pytest.fixture(scope="module")
 def demo_data_csv():
-    url = 'https://raw.githubusercontent.com/niB-gnaW/FLApy2023/master/demo_Data/obsGround_6.csv'
-    filename = 'obsGround_6.csv'
+    url = 'https://raw.githubusercontent.com/niB-gnaW/FLApy2023/master/demo_Data/demoCSV.csv'
+    filename = 'demoCSV.csv'
     download_file(url, filename)
     yield filename
     os.remove(filename)
@@ -54,6 +54,12 @@ def test_read_RasterData(demo_data_raster):
     site.read_RasterData(inRasterFile)
     assert isinstance(site.DSM, xr.DataArray) is True
 
+def test_read_csvData(demo_data_csv):
+    inCSVFile = demo_data_csv
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_csvData(inCSVFile)
+    assert isinstance(site.OBS, np.ndarray) is True and site.OBS.shape[1] == 4
+
 def test_m2p():
     one_mesh = xr.DataArray(np.ones((10, 10)), dims=('x', 'y'))
     outPoints = fp.DataManagement.StudyFieldLattice.m2p(one_mesh)
@@ -67,8 +73,3 @@ def test_p2m():
     outMesh = fp.DataManagement.StudyFieldLattice.p2m(one_points, 1)
     assert isinstance(outMesh, xr.DataArray) is True
 
-def test_read_csvData():
-    inCSVFile = 'obsGround_6.csv'
-    site = fp.DataManagement.StudyFieldLattice()
-    site.read_csvData(inCSVFile)
-    assert isinstance(site.obsGround, np.ndarray) is True and site.obsGround.shape[1] == 3
