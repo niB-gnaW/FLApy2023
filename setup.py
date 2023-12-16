@@ -6,7 +6,7 @@ with open('README.md', 'r') as fh:
 
 setup(
     name='FLApy',
-    version='1.3.0',
+    version='1.3.1',
     description='Forest Light availability heterogeneity Analysis in Python',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
