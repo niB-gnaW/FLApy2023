@@ -17,7 +17,7 @@ setup(
     py_modules=['FLApy.__init__', 'FLApy.DataManagement', 'FLApy.LAcalculator', 'FLApy.LAHanalysis', 'FLApy.Visualization'],
     classifiers=['Programming Language :: Python :: 3.8', 'License :: OSI Approved :: MIT License', 'Operating System :: OS Independent',],
     python_requires='>=3.8',
-    install_requires=['numpy==1.21.1',
+    install_requires=['numpy==1.26.2',
                       'scipy==1.6.0',
                       'matplotlib',
                       'open3d',
