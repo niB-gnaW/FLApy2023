@@ -34,7 +34,7 @@ setup(
                       'SALib',
                       'scikit-learn',
                       'seaborn',
-                      'vtk==9.0.1',
+                      'vtk==9.3.0',
                       'pytest',
                       ],
 )
