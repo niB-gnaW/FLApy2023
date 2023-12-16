@@ -21,7 +21,7 @@ setup(
                       'scipy==1.6.0',
                       'matplotlib',
                       'open3d',
-                      'pyvista==0.33.3',
+                      'pyvista==0.43.1',
                       'PVGeo',
                       'laspy',
                       'pandas',
