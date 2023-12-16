@@ -23,7 +23,7 @@ def demo_data():
     yield filename
     os.remove(filename)
 
-# 测试读取 LasData 的功能
+
 def test_read_LasData(demo_data):
     site = fp.DataManagement.StudyFieldLattice()
     site.read_LasData(demo_data)
