@@ -18,7 +18,7 @@ setup(
     classifiers=['Programming Language :: Python :: 3.8', 'License :: OSI Approved :: MIT License', 'Operating System :: OS Independent',],
     python_requires='>=3.8',
     install_requires=['numpy==1.21.1',
-                      'scipy==1.6.0',
+                      'scipy==1.11.4',
                       'matplotlib',
                       'open3d',
                       'pyvista==0.33.3',
