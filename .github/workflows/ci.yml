@@ -25,10 +25,7 @@ jobs:
       run: |
         pytest tests/ --cov=FLAPy --cov-report=xml
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4-beta
-      with:
-        flags: smart-tests
-        verbose: true
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v3
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

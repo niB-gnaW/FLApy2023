@@ -4,6 +4,7 @@ import os
 import pytest
 import numpy as np
 import xarray as xr
+import pyvista as pv
 
 
 def download_file(url, local_filename):
@@ -73,3 +74,10 @@ def test_p2m():
     outMesh = fp.DataManagement.StudyFieldLattice.p2m(one_points, 1)
     assert isinstance(outMesh, xr.DataArray) is True
 
+def test_gen_SFL(demo_data):
+    inLasFile = demo_data
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_LasData(inLasFile)
+    bbox = [100, 200, 100, 200]
+    site.gen_SFL(bbox=bbox, resolution=1, obsType=3, udXSpacing=20, udYSpacing=20, udZNum=2)
+    assert isinstance(site._SFL, pv.UniformGrid) is True
