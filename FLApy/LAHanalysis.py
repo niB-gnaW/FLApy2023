@@ -232,28 +232,6 @@ class LAH_analysis(object):
             _range = np.max(values) - np.min(values)
 
         return _average, _std, _CV, _range
-    def calculate_spatial_weights_matrix_idw(self, coords):
-        # This function is used to calculate the spatial weights matrix based on the inverse distance weighting method.
-        # Parameters:
-        #   coords: the coordinates of the given values
-        # Return:
-        #   W_normalized: the spatial weights matrix
-
-        n_points = len(coords)
-        time1 = time.time()
-        print('Number of observers: {}'.format(n_points) + '|Calculating Spatial Automatically Correlationship ...|' + ' Construct the KDTree ...')
-        kdtree = KDTree(coords)
-        distances, indices = kdtree.query(coords, k=n_points)
-        print('KDTree was constructed in {} seconds'.format(time.time() - time1))
-        row_indices = np.arange(n_points)[:, None]
-        sorted_distances = distances[row_indices, indices.argsort()]
-        sorted_distances = np.maximum(sorted_distances, 1e-6)
-        W = 1 / sorted_distances
-        np.fill_diagonal(W, 0)
-        row_sums = W.sum(axis=1)
-        W_normalized = W / row_sums[:, np.newaxis]
-        print('Spatial Automatically Correlationship was calculated in {} seconds'.format(time.time() - time1))
-        return W_normalized
 
     @staticmethod
     def calculate_spatial_weights_matrix_idw_LHS(coords, n_neighbors=None):

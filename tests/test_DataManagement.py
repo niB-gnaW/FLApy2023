@@ -40,9 +40,6 @@ def demo_data_csv():
     os.remove(filename)
 
 
-
-
-
 def test_read_LasData(demo_data):
     inLasFile = demo_data
     site = fp.DataManagement.StudyFieldLattice()
@@ -55,10 +52,28 @@ def test_read_RasterData(demo_data_raster):
     site.read_RasterData(inRasterFile)
     assert isinstance(site.DSM, xr.DataArray) is True
 
+def test_read_RasterData_DTM(demo_data_raster):
+    inRasterFile = demo_data_raster
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_RasterData(inRasterFile, readAs='DTM')
+    assert isinstance(site.DTM, xr.DataArray) is True
+
+def test_read_RasterData_DEM(demo_data_raster):
+    inRasterFile = demo_data_raster
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_RasterData(inRasterFile, readAs='DEM')
+    assert isinstance(site.DEM, xr.DataArray) is True
+
 def test_read_csvData(demo_data_csv):
     inCSVFile = demo_data_csv
     site = fp.DataManagement.StudyFieldLattice()
     site.read_csvData(inCSVFile)
+    assert isinstance(site.OBS, np.ndarray) is True and site.OBS.shape[1] == 4
+
+def test_read_csvData_4c(demo_data_csv):
+    inCSVFile = demo_data_csv
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_csvData(inCSVFile, readAs='exList')
     assert isinstance(site.OBS, np.ndarray) is True and site.OBS.shape[1] == 4
 
 def test_m2p():
@@ -81,3 +96,38 @@ def test_gen_SFL(demo_data):
     bbox = [100, 200, 100, 200]
     site.gen_SFL(bbox=bbox, resolution=1, obsType=3, udXSpacing=20, udYSpacing=20, udZNum=2)
     assert isinstance(site._SFL, pv.UniformGrid) is True
+
+def test_gen_SFL2(demo_data):
+    inLasFile = demo_data
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_LasData(inLasFile)
+    bbox = [100, 200, 100, 200]
+    site.gen_SFL(bbox=bbox, resolution=1, obsType=0)
+    assert isinstance(site._SFL, pv.UniformGrid) is True
+
+def test_gen_SFL3(demo_data, demo_data_csv):
+    inLasFile = demo_data
+    inCSVFile = demo_data_csv
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_LasData(inLasFile)
+    site.read_csvData(inCSVFile)
+    bbox = [100, 200, 100, 200]
+    site.gen_SFL(bbox=bbox, resolution=1, obsType=1)
+    assert isinstance(site._SFL, pv.UniformGrid) is True
+
+def test_gen_SFL4(demo_data, demo_data_csv):
+    inLasFile = demo_data
+    inCSVFile = demo_data_csv
+    site = fp.DataManagement.StudyFieldLattice()
+    site.read_LasData(inLasFile)
+    site.read_csvData(inCSVFile)
+    bbox = [100, 200, 100, 200]
+    site.gen_SFL(bbox=bbox, resolution=1, obsType=2)
+    assert isinstance(site._SFL, pv.UniformGrid) is True
+
+def test_cart2pol():
+    X = np.arange(0, 10, 1)
+    Y = np.arange(0, 10, 1)
+    outPoints = fp.DataManagement.StudyFieldLattice.cart2pol(X, Y)
+    assert isinstance(outPoints, tuple) is True
+
