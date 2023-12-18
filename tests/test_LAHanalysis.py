@@ -26,7 +26,7 @@ def test_LAH_analysis(demo_data):
     site.read_LasData(inLasFile)
     site.gen_SFL(bbox=[100, 200, 100, 200], resolution=1, obsType=3, udXSpacing=20, udYSpacing=20, udZNum=2)
     siteLA = fp.LAcalculator.LAcalculator(site)
-    siteLA.computeBatch(multiPro = 'joblib', CPU_count=4)
+    siteLA.computeBatch(multiPro = 'joblib')
     siteLAH = fp.LAHanalysis.LAH_analysis(siteLA)
     result = siteLAH.com_allLAH(givenHeight=1.5)
     assert isinstance(result, pd.DataFrame) is True

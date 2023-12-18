@@ -26,6 +26,6 @@ def test_LAcalculator(demo_data):
     site.read_LasData(inLasFile)
     site.gen_SFL(bbox=[100, 200, 100, 200], resolution=1, obsType=3, udXSpacing=20, udYSpacing=20, udZNum=2)
     siteLA = fp.LAcalculator.LAcalculator(site)
-    siteLA.computeBatch(multiPro = 'joblib', CPU_count=4)
+    siteLA.computeBatch(multiPro = 'joblib')
     assert (isinstance(siteLA._DataContainer.field_data['SVF_flat'], pv.pyvista_ndarray) is True and
             isinstance(siteLA._DataContainer.field_data['SVF_hemi'], pv.pyvista_ndarray) is True)
