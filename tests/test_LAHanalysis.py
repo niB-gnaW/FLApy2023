@@ -35,6 +35,9 @@ def test_LAH_analysis(demo_data):
     result3 = siteLAH.com_allLAH(givenHeight=[1,20,30])
     assert isinstance(result3, pd.DataFrame) is True
     result4 = siteLAH.com_allLAH_subplot(bbox=[100, 200, 100, 200], subNum=16)
+    assert isinstance(result4, pd.DataFrame) is True
+
+
 
 def test_sigmoid_func():
     assert fp.LAHanalysis.sigmoid_func(1, 1, 1) == 50
