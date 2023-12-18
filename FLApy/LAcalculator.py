@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 import pyvista as pv
@@ -8,9 +7,6 @@ import itertools
 import os
 import time
 
-from SALib.analyze import sobol
-from SALib.sample import saltelli
-from tqdm import tqdm
 from scipy.spatial import KDTree
 from joblib import Parallel, delayed
 from FLApy.DataManagement import StudyFieldLattice
@@ -28,8 +24,6 @@ class LAcalculator(StudyFieldLattice):
                  inDataContainer = None,
                  lensMapRadius = 500,
                  pointSizeRange = (0.5, 7),
-                 calibration = None,
-                 caliFilePath = None,
                  centerTerrain = True,
                  downSample = True):
 
@@ -66,56 +60,6 @@ class LAcalculator(StudyFieldLattice):
             obsZcenter = np.mean(self._obsSet[:, 2])
             obsCenter = np.array([obsXcenter, obsYcenter, obsZcenter])
             self.centerTerrainDrawed = self.drawIn_terrain(self.mergeTerrain, obsCenter)
-
-        if caliFilePath is None and self.__obsExternalLabel == '2':
-            self.pointSizeRange = self.calibration_SA(calibration)
-
-
-    def calibration_SA(self, inRealValue = None):
-        # Calibrate the point size range.
-        if inRealValue is None:
-            xyz = self._DataContainer.field_data['OBS_SFL']
-            v = self._DataContainer.field_data['Given_Value']
-            readData = np.column_stack((xyz, v))
-        elif os.path.isfile(inRealValue) is True:
-            readData = np.loadtxt(inRealValue, delimiter=',')
-
-        realX = readData[:, 0]
-        realY = readData[:, 1]
-        realZ = readData[:, 2]
-        realV = readData[:, 3]
-
-        location = np.column_stack((realX, realY, realZ))
-
-        problem = {
-            'num_vars': 1,
-            'names': ['Delta'],
-            'bounds': [[0, 10]]
-        }
-
-        param_value = saltelli.sample(problem, 1024)
-
-        errors = []
-        for com4calibration in tqdm(range(len(param_value)), desc='Calibration...', ncols=100):
-            pointSize = param_value[com4calibration]
-
-            for comVcalibration in range(len(location)):
-                _locCali = location[comVcalibration]
-                _pointSizeCali = pointSize
-                self.pointSizeRange = _pointSizeCali
-                _simulatedValue = self.compute_cali_Batch()
-                simVs = _simulatedValue
-            realV = np.array(realV)
-            simVs = np.array(simVs)
-            slope, intercept = np.polyfit(realV, simVs, 1)
-            error = np.abs(slope * realV + intercept - simVs) / np.sqrt(slope ** 2 + 1)
-            errors.append(error)
-
-        caliResults = np.array(errors)
-
-        Si = sobol.analyze(problem, caliResults, print_to_console=True)
-        return Si
-
 
 
     def pol2cart(self, rho, phi):
@@ -377,63 +321,6 @@ class LAcalculator(StudyFieldLattice):
         SVF = self.cal_LA(self.cMapAll)
         self._SVF_ = SVF
         return (SVF[0], SVF[1])
-
-
-    def computeSingle_cali(self, loc, pointSizeRange):
-        # Compute the LA for a single observation.
-        # Parameters:
-        #   loc: the location of the observation.
-        # Return:
-        #   LA: the LA.
-
-        result4oneObs = self.drawIn_vegPoints(self.pointsBuffered, loc, pointSizeRange)
-        result4oneObsTer = self.centerTerrainDrawed
-        mergeResult = result4oneObsTer * result4oneObs
-        _cMap4veg = result4oneObs
-        _cMap4ter = result4oneObsTer
-        _cMapAll = mergeResult
-        SVF = self.cal_LA(_cMapAll)
-
-        return (SVF[0], SVF[1])
-
-    def compute_cali_Batch(self, multiPro = 'p_map', CPU_count = None):
-        if CPU_count is None:
-            numCPU = os.cpu_count() - 1
-        else:
-            numCPU = int(CPU_count)
-
-        obsIdx = np.arange(len(self._obsSet))
-
-        if multiPro == 'joblib':
-            time_start = time.time()
-            print('\033[32mProcessing started!'+ 'Number of obs:'+ str(len(obsIdx)) + '\033[0m')
-
-            if self.centerTerrain is False:
-                SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingle)(arg) for arg in obsIdx)
-            else:
-                SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingleFAST)(arg) for arg in obsIdx)
-
-            time_end = time.time()
-            print('\033[32mProcessing finished!'+ str(time_end - time_start)+'s' + '\033[0m')
-
-        if multiPro == 'p_map':
-            from p_tqdm import p_map
-            time_start = time.time()
-            print('\033[32mProcessing started!' + 'Number of obs:' + str(len(obsIdx)) + '\033[0m')
-
-            if self.centerTerrain is False:
-                SVFset = p_map(self.computeSingle, obsIdx, num_cpus = numCPU, desc='Batch processing', ncols=100)
-            else:
-                SVFset = p_map(self.computeSingleFAST, obsIdx, num_cpus=numCPU, desc='Batch processing', ncols=100)
-            time_end = time.time()
-            print('\033[32mProcessing finished!' + str(time_end - time_start) + 's' + '\033[0m')
-
-        SVFcellData = np.array(SVFset)
-
-        return SVFcellData[:, 0]
-
-
-
 
     def computeBatch(self, save = None, multiPro = 'p_map', CPU_count = None):
         # Compute the LA for a batch of observations.
