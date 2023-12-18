@@ -1,7 +1,7 @@
 ![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/logo.png)
 # Forest Light Analyzer Python package: FLApy 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/FLApy?label=Downloads&style=flat-square)
-![Codecov](https://img.shields.io/codecov/c/github/niB-gnaW/FLApy2023)
+
 
 
 ## General description
@@ -142,6 +142,9 @@ Cameron Proctor<sup>2</sup>,
 Zhiliang Yao<sup>3, 4</sup>,
 Ninglv Li<sup>1</sup>,
 Qifei Chen<sup>1</sup>,
+Wenjun Liu<sup>1</sup>,
+Suhui Ma<sup>1</sup>,
+Chuanbao Jing<sup>1</sup>,
 Zhaoyu Zhou<sup>1</sup>,
 Weihong Liu<sup>1</sup>,
 Yufeng Ma<sup>1</sup>,
@@ -166,10 +169,11 @@ This research is supported by the National Natural Science Foundation of China (
 - Zhiliang Yao and Ninglv Li worked together to create the simulated forest.
 - Weihong Liu and Zhaoyu Zhou conducted the ground forest species inventory.
 - The field UAV data were collected by Zhaoyu Zhou, Qifei Chen, Yufeng Ma, and Zimu Wang in collaboration.
-- Bin Wang, Qifei Chen, and Yufeng Ma created the annotations and the user manual for FLApy and are responsible for building and maintaining the GitHub repository.
-- Bin Wang and Cameron Proctor drafted the manuscript, and Bin Wang drew all the graphs in the manuscript.
-- Cameron Proctor, Zhiliang Yao, Ninglv Li, Weihong Liu, and Zhiming Zhang provided advice for two cases.
-- Zhiming Zhang, Cameron Proctor, Zhiliang Yao, and Luxiang Lin reviewed and commented on the manuscript.
+- Bin Wang, Qifei Chen, and Yufeng Ma, Wenjun Liu created the annotations and the user manual for FLApy and are responsible for building and maintaining the GitHub repository.
+- Bin Wang drafted the manuscript, and Bin Wang drew all the graphs in the manuscript.
+- Cameron Proctor, Zhiliang Yao, Ninglv Li, Suhui Ma, Chuanbao Jing and Zhiming Zhang provided advice for two cases.
+- Zhiming Zhang, Cameron Proctor, Zhiliang Yao, Wenjun Liu, Suhui Ma, Chuanbao Jing, and Luxiang Lin reviewed and commented on the manuscript.
+- All authors read and accepted the final version of the manuscript.
 
 # References to third-party packages
 Pyvista: https://github.com/pyvista/pyvista
