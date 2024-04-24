@@ -6,10 +6,12 @@ import pyvista as pv
 import itertools
 import os
 import time
+import pandas as pd
 
 from scipy.spatial import KDTree
 from joblib import Parallel, delayed
 from FLApy.DataManagement import StudyFieldLattice
+from tqdm import tqdm
 
 class LAcalculator(StudyFieldLattice):
     # The class is used to calculate the LA based on the input SFL.
@@ -371,6 +373,63 @@ class LAcalculator(StudyFieldLattice):
         elif save is not None:
             self._DataContainer.save(save)
 
+    def cal_optimalPointSize_batch(self, inDateFrame, CPU_count = None):
+        # Calculate the optimal point size for a batch of observations.
+        # Parameters:
+        #   inDateFrame: the input data frame.
+        #   CPU_count: the number of CPUs to use. If None, all CPUs will be used.
+        # Return:
+        #   optimalPointSize: the optimal point size.
+
+        inOBS = inDateFrame
+        inOBS_Array = np.array(inOBS)
+
+        self._obsSet = inOBS_Array[:, 0:3]
+
+
+        if CPU_count is None:
+            numCPU = os.cpu_count() - 1
+        else:
+            numCPU = int(CPU_count)
+
+        obsIdx = np.arange(len(inOBS_Array))
+        print('\033[32mProcessing started!' + 'Number of obs:' + str(len(obsIdx)) + '\033[0m')
+
+        _pointSizeDeltaPool = np.arange(self._pointSizeMin, self._pointSizeDelta, 0.2)
+        __pointSizeDelta_temp_list = []
+        __RMSE_temp_list = []
+        print('PointSizeDelta Pool Number: ' + str(len(_pointSizeDeltaPool)))
+        for __pointSizeDelta_temp in tqdm(_pointSizeDeltaPool):
+            self._pointSizeDelta = __pointSizeDelta_temp
+            pointSizeSet = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingleFAST)(arg) for arg in obsIdx)
+            pointSizeCell = np.array(pointSizeSet)
+
+            inOBS['SVFsim'] = pointSizeCell[:, 0]
+
+            RMSE = self.cal_RMSE(inOBS['SVFreal'], inOBS['SVFsim'])
+            print('PointSizeDelta: ' + str(__pointSizeDelta_temp) + ' RMSE: ' + str(RMSE))
+            __pointSizeDelta_temp_list.append(__pointSizeDelta_temp)
+            __RMSE_temp_list.append(RMSE)
+
+        __RMSE_temp_list = np.array(__RMSE_temp_list)
+        optimalPointSize = __pointSizeDelta_temp_list[np.argmin(__RMSE_temp_list)]
+
+        result = pd.DataFrame({'pointSizeDelta': __pointSizeDelta_temp_list, 'RMSE': __RMSE_temp_list})
+
+        return optimalPointSize, result
+
+    def cal_RMSE(self, inRealData, inSimData):
+        # Calculate the root mean square error (RMSE) between the real data and the simulated data.
+        # Parameters:
+        #   inRealData: The real data, which is a numpy array with shape (n, 1).
+        #   inSimData: The simulated data, which is a numpy array with shape (n, 1).
+        # Return:
+        #   RMSE: The root mean square error (RMSE) between the real data and the simulated data.
+
+        RMSE = np.sqrt(np.mean(np.square(inRealData - inSimData)))
+        return RMSE
+
+
 def update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoordRho, ndx):
     # Update the indices of the terrain points.
     # Parameters:
@@ -388,7 +447,6 @@ def update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoo
         return ndx
 
     else:
-        from tqdm import tqdm
 
         for idx in tqdm(range(bins)):
             tbinMin = np.deg2rad(-180) + np.deg2rad(idx)
