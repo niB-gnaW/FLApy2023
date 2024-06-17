@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
 
+# FLApy: Forest Light Analyzer python package
+# Author: Bin Wang
+# Email: wb931022@hotmail.com
+# Date: 2023-12-10
+# Version: 1.0.0 'JEAN'
+# License: MIT License
+# Module: Visualization
+# Description: This module is used to visualize the 3D point cloud, raster data, study field lattice, and figures of LAH analysis.
+
 import numpy as np
 import pyvista as pv
 import matplotlib.pyplot as plt

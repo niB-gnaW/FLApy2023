@@ -6,9 +6,9 @@
 
 ## General description
 Forest Light Analyzer python package (FLApy) is a python package for assessing
-light availability（LA） condition and analysing Light availability Heterogeneity at
+light availability（LAv） condition and analysing Light availability Heterogeneity at
 any observers within forest using Airborne Laser Scanning data and analysis the change or
-heterogeneity of LA over spatial scale. At the same time, FLApy can also be used to analysing
+heterogeneity of LAv over spatial scale. At the same time, FLApy can also be used to analysing
 the Light Availability Heterogeneity (LAH) of forest, and calculate a series of indicators to
 describe the 3D LAH of forest at different spatial scales.
 
@@ -58,9 +58,9 @@ site.gen_SFL([xmin, xmax, ymin, ymax], resolution=1)
 ```
 
 ### Compute the Light Availability (LA) at voxels
-The LA is calculated at each voxel in the SFL. The LA is calculated by the `LAcalculator` class.
-The voxel-traverse method is used to calculate the LA within SFL if the observation type is default.
-A cutting-edge parallel computing method is used to calculate the LA within SFL, it can save a lot of time if the study area is large.
+The LAv is calculated at each voxel in the SFL. The LAv is calculated by the `LAcalculator` class.
+The voxel-traverse method is used to calculate the LAv within SFL if the observation type is default.
+A cutting-edge parallel computing method is used to calculate the LAv within SFL, it can save a lot of time if the study area is large.
 The actual processing time depends on the number of CPU cores.
 
 ```

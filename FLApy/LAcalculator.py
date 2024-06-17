@@ -1,5 +1,15 @@
 # -*- coding: utf-8 -*-
 
+# FLApy: Forest Light Analyzer python package
+# Author: Bin Wang
+# Email: wb931022@hotmail.com
+# Date: 2023-12-10
+# Version: 1.0.0 'JEAN'
+# License: MIT License
+# Module: LAcalculator
+# Description: The module is used to calculate the light availability (LA) based on the input StudyFieldLattice (SFL).
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pyvista as pv

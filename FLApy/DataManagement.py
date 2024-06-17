@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 
-
+# FLApy: Forest Light Analyzer python package
+# Author: Bin Wang
+# Email: wb931022@hotmail.com
+# Date: 2023-12-10
+# Version: 1.0.0 'JEAN'
+# License: MIT License
+# Module: DataManagement
+# Description: This module is used to manage the data of the SFL.
 
 import math
 import pyvista as pv
@@ -532,6 +539,14 @@ class StudyFieldLattice(UniformGrid):
 
     @staticmethod
     def get_DSM_ndarray(input_points, x_bounds = None, y_bounds = None, resolution=1):
+        # This function can create the DSM ndarray based on given points
+        # Parameters:
+        # |-input_points: array, the input points' format is XYZ array. The function will run using the data derived from the parant class if its None
+        # |-x_bounds: tuple, the x bounds of the DSM
+        # |-y_bounds: tuple, the y bounds of the DSM
+        # |-resolution: define the resolution of the raster.
+
+        # Return: export an interpolated Digital Surface Model.
 
 
         x = input_points[:, 0]

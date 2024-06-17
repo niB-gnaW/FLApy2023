@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
 
+# FLApy: Forest Light Analyzer python package
+# Author: Bin Wang
+# Email: wb931022@hotmail.com
+# Date: 2023-12-10
+# Version: 1.0.0 'JEAN'
+# License: MIT License
+# Module: LAHanalysis
+# Description: This module is used to calculate the Light Availability Heterogeneity (LAH) index based on the given SFL data.
+
 
 import numpy as np
 import naturalneighbor
