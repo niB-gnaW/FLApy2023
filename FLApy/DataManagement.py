@@ -17,7 +17,7 @@ import xarray as xr
 import open3d as o3d
 import laspy
 
-from pyvista.core.grid import UniformGrid
+from pyvista.core.grid import ImageData
 from PVGeo.model_build import CreateUniformGrid
 from PVGeo.grids import ExtractTopography
 from scipy import interpolate
@@ -25,13 +25,10 @@ from scipy.ndimage import distance_transform_edt, binary_erosion, binary_dilatio
 from scipy.ndimage.morphology import generate_binary_structure
 from tqdm import tqdm
 
-class StudyFieldLattice(UniformGrid):
+class StudyFieldLattice(ImageData):
     # This class is used to create a SFL object for the study field. All the data will be stored in this object.
     # Parameters:
     #   workspace: the workspace of the project, default is the current working directory. If the workspace is specified, the temFile.vtk will be stored in the workspace.
-    #
-    # Return:
-    #   SFL: a SFL object
 
     def __init__(self, workspace = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -44,9 +41,8 @@ class StudyFieldLattice(UniformGrid):
             self._workspace = workspace
 
 
-
         #string
-        self.temPath = str(self._workspace + '/.temFile.vtk')
+        self._temPath = str(self._workspace + '/.temFile.vtk')
         #XYZ
         self._point_cloud = None
         self._DSM = None
@@ -435,9 +431,9 @@ class StudyFieldLattice(UniformGrid):
         self._SFL.field_data['DSM_cliped'] = self.clip_Points(self.m2p(self._DSM), bbox)
 
         self._SFL.add_field_data([self._obsType], 'OBS_Type')
-        self._SFL.add_field_data([self.temPath], 'temPath')
+        self._SFL.add_field_data([self._temPath], '_temPath')
 
-        self._SFL.save(self.temPath)
+        self._SFL.save(self._temPath)
         print('\033[35mSFL has been generated!' + '\033[0m')
 
 
@@ -755,5 +751,9 @@ class dataInput(object):
         return self._vtkR
 
     def chk_SFL(self):
+        return
+
+    def read_netCDF(self):
+        # This function is used to read the netCDF file.
         return
 

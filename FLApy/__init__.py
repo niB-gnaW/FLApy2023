@@ -7,6 +7,7 @@ import urllib.request
 import platform
 os.environ['USE_PYGEOS'] = '0'
 
+'''''
 def is_package_installed(package_name):
     try:
         __import__(package_name)
@@ -37,13 +38,14 @@ def check_and_install_dependencies():
         install_whl_from_github(whl_url)
 
 check_and_install_dependencies()
+'''''
 
 from FLApy import DataManagement, LAcalculator, LAHanalysis, Visualization
 vtk.vtkObject.GlobalWarningDisplayOff()
 
 import pyvista
 
-FLApy_theme = pyvista.themes.DefaultTheme()
+FLApy_theme = pyvista.themes.DocumentTheme()
 FLApy_theme.background = 'white'
 FLApy_theme.title = 'FLApy'
 FLApy_theme.font.family = 'Times'

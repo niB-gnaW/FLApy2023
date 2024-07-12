@@ -50,11 +50,11 @@ class LAH_analysis(object):
             if hasattr(inGrid, '_SFL') is False and hasattr(inGrid, '_DataContainer') is False:
                 self._inGrid = inGrid
 
-            self.tempSFL = str(self._inGrid.field_data['temPath'][0])
+            self.tempSFL = str(self._inGrid.field_data['_temPath'][0])
 
         elif inGrid is not None and isinstance(inGrid, str) is True:
             self._inGrid = pv.read(inGrid)
-            self.tempSFL = str(self._inGrid.field_data['temPath'][0])
+            self.tempSFL = str(self._inGrid.field_data['_temPath'][0])
 
 
         self.__obsType = self._inGrid.field_data['OBS_Type'][0]
@@ -132,10 +132,10 @@ class LAH_analysis(object):
         tensorGrid.field_data['DTM_cliped'] = inGrid.field_data['DTM_cliped']
         tensorGrid.field_data['DSM_cliped'] = inGrid.field_data['DSM_cliped']
 
-        tensorGrid.field_data['temPath'] = inGrid.field_data['temPath']
+        tensorGrid.field_data['_temPath'] = inGrid.field_data['_temPath']
         tensorGrid.field_data['OBS_Type'] = inGrid.field_data['OBS_Type']
 
-        tensorGrid.add_field_data([str(inGrid.field_data['temPath'][0])], 'temPath')
+        tensorGrid.add_field_data([str(inGrid.field_data['_temPath'][0])], '_temPath')
 
         _dsm = np.array(tensorGrid.field_data['DSM'])
         dsm = _dsm[~np.isnan(_dsm[:, 2])]
