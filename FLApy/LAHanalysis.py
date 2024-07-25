@@ -114,7 +114,7 @@ class LAH_analysis(object):
         Granges = [[Xmin, Xmax, resolutionGrid], [Ymin, Ymax, resolutionGrid], [Zmin, Zmax, resolutionGrid]]
         inter = naturalneighbor.griddata(self._OBScoords, self._valueImport, Granges)
 
-        tensorGrid = pv.UniformGrid()
+        tensorGrid = pv.ImageData()
         tensorGrid.dimensions = np.array(inter.shape) + 1
         tensorGrid.origin = (Xmin, Ymin, Zmin)
         tensorGrid.spacing = (resolutionGrid, resolutionGrid, resolutionGrid)
