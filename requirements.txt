@@ -1,9 +1,9 @@
-numpy==1.20.0
-scipy==1.14.0
+numpy
+scipy
 matplotlib
 open3d
-pyvista==0.44.0
-PVgeo==3.0.1
+pyvista
+PVgeo
 laspy
 pandas
 tqdm
@@ -13,4 +13,3 @@ joblib
 scikit-learn
 seaborn
 vtk
-naturalneighbor

@@ -12,11 +12,19 @@ heterogeneity of LAv over spatial scale. At the same time, FLApy can also be use
 the Light Availability Heterogeneity (LAH) of forest, and calculate a series of indicators to
 describe the 3D LAH of forest at different spatial scales.
 
+
+## Important notes
+Now, the FLApy package is mainly used for the analysis of the 3D light availability heterogeneity within forest communities. 
+FLApy provides a solid base for the analysis of the 3D light availability heterogeneity within forest communities,
+as well as the calculation of a series of indicators to describe the 3D light availability heterogeneity of forest at different spatial scales.
+For other microclimate factors, FLApy accepts calculations from third parties (with spatial labels) and supports the same visualization, 3D spatial analysis, and 3D heterogeneity index calculations as LAv.
+
+
 ## Demo Data
 The demo Data can be found in the demo folder.
 
 # Getting started
-FLApy is recommended to be installed in a virtual environment (Python version: 3.8.6).
+FLApy is recommended to be installed in a virtual environment (Python version: 3.8.X).
 GDAL(http://www.gdal.org/) and C++ 14.0 are required to be installed before installing FLApy.
 
 ## Installation
@@ -160,6 +168,11 @@ Luxiang Lin<sup>3, 5</sup>
 
 Author mail: Bin Wang (wb931022@hotmail.com); Zhiming Zhang (zzming76@ynu.edu.cn)
 
+# Citation
+Wang, B., Proctor, C., Yao, Z., Li, N., Chen, Q., Liu, W., Ma, S., Jing, C., Zhou, Z., Liu, W., Ma, Y., Wang, Z., Zhang, Z., & Lin, L. (2024). FLApy: A Python package for evaluating the 3D light availability heterogeneity within forest communities. Methods in Ecology and Evolution, 15(9), 1540–1552. https://doi.org/10.1111/2041-210X.14382
+
+
+
 # Acknowledgements
 This research is supported by the National Natural Science Foundation of China (32260291), The Second Tibetan Plateau Scientific Expedition and Research (STEP) program (2019QZKK0308), and the Joint Fund of the National Natural Science Foundation of China-Yunnan Province (U1902203). In addition, it has received strong support from The Project for Talent and Platform of Science and Technology in Yunnan Province Science and Technology Department (202205AM070005), the Major Program for Basic Research Project of Yunnan Province (202101BC070002) and the Key Research and Development Program of Yunnan Province (No. 202303AC100009). We also thank the Ailao Mountain Nature Reserve Ecological Station for field work support, and the Southeast Asian Biodiversity Institute (151C53KYSB20200019) for laboratory platforms. Besides, we acknowledge the support of the Natural Sciences and Engineering Research Council of Canada (NSERC, RGPIN-2022-04861). Finally, we would like to express our sincere thanks to Prof. Jiajia Liu of Fudan University, Prof. Hans De Boeck of the University of Antwerp, and Dr. Suhui Ma and Dr. Chuanbao Jing of Yunnan University for their valuable suggestions and guidance on the writing of this work.
 
@@ -221,5 +234,3 @@ pandas: https://pandas.pydata.org/
 miniball: https://github.com/marmakoide/miniball
 
 
-# Citation
-Wang, B., Proctor, C., Yao, Z., Li, N., Chen, Q., Liu, W., Ma, S., Jing, C., Zhou, Z., Liu, W., Ma, Y., Wang, Z., Zhang, Z., & Lin, L. (2024). FLApy: A Python package for evaluating the 3D light availability heterogeneity within forest communities. Methods in Ecology and Evolution, 15(9), 1540–1552. https://doi.org/10.1111/2041-210X.14382
