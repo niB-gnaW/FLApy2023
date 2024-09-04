@@ -28,9 +28,9 @@ def check_and_install_dependencies():
     if not is_package_installed('naturalneighbor'):
         os_type = platform.system()
         if os_type == 'Windows':
-            whl_url = 'https://raw.githubusercontent.com/niB-gnaW/FLApy2023/master/dependenciesFLApy/naturalneighbor-0.2.1-cp38-cp38-win_amd64.whl'
+            whl_url = 'https://raw.githubusercontent.com/niB-gnaW/FLApy2023/master/dependenciesFLApy/naturalneighbor-0.2.1-cp311-cp311-win_amd64.whl'
         elif os_type == 'Darwin':
-            whl_url = 'https://raw.githubusercontent.com/niB-gnaW/FLApy2023/master/dependenciesFLApy/naturalneighbor-0.2.1-cp38-cp38-macosx_10_15_x86_64.whl'
+            print('MacOS is not supported yet')
         else:
             print(f'Unsuported OS type: {os_type}')
             return
