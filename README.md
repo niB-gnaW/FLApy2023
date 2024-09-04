@@ -222,4 +222,4 @@ miniball: https://github.com/marmakoide/miniball
 
 
 # Citation
-In submission.
+Wang, B., Proctor, C., Yao, Z., Li, N., Chen, Q., Liu, W., Ma, S., Jing, C., Zhou, Z., Liu, W., Ma, Y., Wang, Z., Zhang, Z., & Lin, L. (2024). FLApy: A Python package for evaluating the 3D light availability heterogeneity within forest communities. Methods in Ecology and Evolution, 15(9), 1540–1552. https://doi.org/10.1111/2041-210X.14382
