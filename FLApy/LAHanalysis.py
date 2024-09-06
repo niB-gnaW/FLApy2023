@@ -30,6 +30,7 @@ from PVGeo.grids import ExtractTopography
 from tqdm import tqdm
 
 
+
 class LAH_analysis(object):
     # The class is used to calculate LAH index
     # Parameters:
@@ -112,6 +113,7 @@ class LAH_analysis(object):
         resolutionGrid = int(inGrid.field_data['SFLset_resolution'])
 
         Granges = [[Xmin, Xmax, resolutionGrid], [Ymin, Ymax, resolutionGrid], [Zmin, Zmax, resolutionGrid]]
+        apply_patch()
         inter = naturalneighbor.griddata(self._OBScoords, self._valueImport, Granges)
 
         tensorGrid = pv.ImageData()
@@ -1337,4 +1339,53 @@ def sigmoid_func2(x, L ,x0, k, b):
 
     y = L / (1 + np.exp(-k*(x-x0))) + b
     return y
+
+
+import os
+import importlib
+import re
+import sys
+
+
+def apply_patch():
+
+
+
+    nn_file = naturalneighbor.naturalneighbor.__file__
+
+
+    with open(nn_file, 'r', encoding='utf-8') as file:
+        code = file.read()
+
+
+    patterns = {
+        r'\bnp\.complex\b': 'np.complex128',
+        r'\bnp\.int\b': 'int'
+    }
+
+
+    modified = False
+    for pattern, replacement in patterns.items():
+        if re.search(pattern, code):
+            print(f"Replacing '{pattern}' with '{replacement}' in {nn_file}")
+            code = re.sub(pattern, replacement, code)
+            modified = True
+
+
+    if modified:
+        with open(nn_file, 'w', encoding='utf-8') as file:
+            file.write(code)
+        print("All patches applied successfully.")
+    else:
+        print("No patches applied, already up-to-date.")
+
+
+    if 'naturalneighbor.naturalneighbor' in sys.modules:
+        del sys.modules['naturalneighbor.naturalneighbor']
+
+
+    importlib.reload(naturalneighbor)
+
+    print("Module reloaded to apply the patch.")
+
 
