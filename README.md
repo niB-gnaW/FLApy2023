@@ -19,12 +19,19 @@ FLApy provides a solid base for the analysis of the 3D light availability hetero
 as well as the calculation of a series of indicators to describe the 3D light availability heterogeneity of forest at different spatial scales.
 For other microclimate factors, FLApy accepts calculations from third parties (with spatial labels) and supports the same visualization, 3D spatial analysis, and 3D heterogeneity index calculations as LAv.
 
+## Update log
+### 2024-09-07 Version 2.1.0: 
+- 1. Fix the problem which some dependencies conflict each other.
+- 2. Fix the Python version requirement from 3.8 to 3.11.
+- 3. Fix the problem which the installation of FLApy failed.
+
+
 
 ## Demo Data
 The demo Data can be found in the demo folder.
 
 # Getting started
-FLApy is recommended to be installed in a virtual environment (Python version: 3.8.X).
+FLApy is recommended to be installed in a virtual environment (Python version: 3.11.X).
 GDAL(http://www.gdal.org/) and C++ 14.0 are required to be installed before installing FLApy.
 
 ## Installation
