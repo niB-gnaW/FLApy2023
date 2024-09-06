@@ -80,8 +80,16 @@ The actual processing time depends on the number of CPU cores.
 
 ```
 siteLA = fp.LAcalculator.LAcalculator(site)
-siteLA.computeBatch(siteLA)
+result = siteLA.com_allLAH()
+print(result)
 ```
+
+### Visualization
+The 'Visualization' module is used to visualize the 3D heterogeneity statistics of the LAH analysis.
+```
+fp.Visualization.vis_Figures(siteLAH)
+```
+
 
 ### 3D Light Availability Heterogeneity (LAH) analysis
 The LAH is calculated by the `LAH_calculator` class. The `field` is the LA field to be calculated.
