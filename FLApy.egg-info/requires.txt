@@ -1,0 +1,15 @@
+numpy==1.26.4
+scipy
+matplotlib
+open3d
+pyvista
+PVGeo
+laspy
+pandas
+tqdm
+miniball
+xarray
+joblib
+scikit-learn
+seaborn
+vtk

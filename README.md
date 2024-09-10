@@ -1,6 +1,9 @@
 ![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/logo.png)
 # Forest Light Analyzer Python package: FLApy 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/FLApy?label=Downloads&style=flat-square)
+![PyPI - License](https://img.shields.io/pypi/l/FLApy)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/FLApy)
+
 
 
 
