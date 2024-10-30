@@ -23,7 +23,7 @@ as well as the calculation of a series of indicators to describe the 3D light av
 For other microclimate factors, FLApy accepts calculations from third parties (with spatial labels) and supports the same visualization, 3D spatial analysis, and 3D heterogeneity index calculations as LAv.
 
 ## Update log
-### 2024-12-30 Version 2.1.2:
+### 2024-10-30 Version 2.1.2:
 - 1. Fix a problem when reading a csv as 'OBS' type again.
 
 
