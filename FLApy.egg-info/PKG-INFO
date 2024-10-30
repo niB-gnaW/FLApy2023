@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: FLApy
-Version: 2.1.0
+Version: 2.1.1
 Summary: Forest Light availability heterogeneity Analysis in Python
 Home-page: https://github.com/niB-gnaW/FLApy2023
 Author: Bin Wang
@@ -30,6 +30,9 @@ Requires-Dist: vtk
 ![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/logo.png)
 # Forest Light Analyzer Python package: FLApy 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/FLApy?label=Downloads&style=flat-square)
+![PyPI - License](https://img.shields.io/pypi/l/FLApy)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/FLApy)
+
 
 
 
@@ -49,6 +52,10 @@ as well as the calculation of a series of indicators to describe the 3D light av
 For other microclimate factors, FLApy accepts calculations from third parties (with spatial labels) and supports the same visualization, 3D spatial analysis, and 3D heterogeneity index calculations as LAv.
 
 ## Update log
+### 2024-10-30 Version 2.1.1:
+- 1. Fix a problem when reading a csv as 'OBS' type.
+
+
 ### 2024-09-07 Version 2.1.0: 
 - 1. Fix the problem which some dependencies conflict each other.
 - 2. Fix the Python version requirement from 3.8 to 3.11.
@@ -109,8 +116,16 @@ The actual processing time depends on the number of CPU cores.
 
 ```
 siteLA = fp.LAcalculator.LAcalculator(site)
-siteLA.computeBatch(siteLA)
+result = siteLA.com_allLAH()
+print(result)
 ```
+
+### Visualization
+The 'Visualization' module is used to visualize the 3D heterogeneity statistics of the LAH analysis.
+```
+fp.Visualization.vis_Figures(siteLAH)
+```
+
 
 ### 3D Light Availability Heterogeneity (LAH) analysis
 The LAH is calculated by the `LAH_calculator` class. The `field` is the LA field to be calculated.
