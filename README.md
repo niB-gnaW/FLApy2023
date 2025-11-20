@@ -59,6 +59,12 @@ GDAL(http://www.gdal.org/) and C++ 14.0 are required to be installed before inst
 pip install FLApy      # Install the package
 ```
 
+## Initialization
+After installing FLApy, please run the following command to initialize the package and install necessary dependencies (e.g., `naturalneighbor`):
+```
+python -m FLApy.FLApy_ini
+```
+
 ## Usage
 The FLApy workflow is as follows:
 
