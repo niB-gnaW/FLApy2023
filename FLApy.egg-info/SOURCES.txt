@@ -4,6 +4,7 @@ README.md
 requirements.txt
 setup.py
 FLApy/DataManagement.py
+FLApy/FLApy_ini.py
 FLApy/LAHanalysis.py
 FLApy/LAcalculator.py
 FLApy/Visualization.py

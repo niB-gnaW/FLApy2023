@@ -22,7 +22,16 @@ FLApy provides a solid base for the analysis of the 3D light availability hetero
 as well as the calculation of a series of indicators to describe the 3D light availability heterogeneity of forest at different spatial scales.
 For other microclimate factors, FLApy accepts calculations from third parties (with spatial labels) and supports the same visualization, 3D spatial analysis, and 3D heterogeneity index calculations as LAv.
 
+## Upcoming Features
+We are excited to announce that a GUI version of FLApy is currently under development and will be released soon! This new version will provide a user-friendly interface to make forest light analysis even more accessible. Stay tuned!
+
 ## Update log
+### 2025-11-21 Version 2.1.3:
+- 1. Fix the compatibility issue with PyVista 0.43.0+ by using private attributes for custom properties.
+- 2. Fix the deprecated import warning from SciPy 2.0.0+.
+- 3. Optimize the initialization process to prevent redundant dependency checks in multiprocessing.
+- 4. Pin all dependency versions to ensure stability and reproducibility.
+
 ### 2024-10-30 Version 2.1.2:
 - 1. Fix a problem when reading a csv as 'OBS' type again.
 

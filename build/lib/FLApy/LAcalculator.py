@@ -201,7 +201,7 @@ class LAcalculator(StudyFieldLattice):
         vegCBOed = inPoints - inObs
         vegCBOed = vegCBOed[vegCBOed[:, 2] > 0]
         if len(vegCBOed) == 0:
-            self.vegCoverMap = image2ev
+            self._vegCoverMap = image2ev
         else:
             veg2sph_r, veg2sph_theta, veg2sph_phi = self.cart2sph(vegCBOed[:, 0], vegCBOed[:, 1], vegCBOed[:, 2])
             veg2pol_rho, veg2pol_phi = self.sph2pol(veg2sph_theta, veg2sph_phi)
@@ -223,13 +223,13 @@ class LAcalculator(StudyFieldLattice):
             ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
 
             if len(indx) == 0:
-                self.vegCoverMap = image2ev
+                self._vegCoverMap = image2ev
             else:
                 ndx[indx] = True
                 imdx = np.reshape(ndx, image2ev.shape)
                 image2ev[imdx] = 0
-                self.vegCoverMap = image2ev
-        return self.vegCoverMap
+                self._vegCoverMap = image2ev
+        return self._vegCoverMap
 
     def drawIn_terrain(self, inTerrain, inObs):
         # Draw the terrain.
@@ -307,10 +307,10 @@ class LAcalculator(StudyFieldLattice):
         result4oneObsTer = self.drawIn_terrain(self.mergeTerrain, obsIn)
         mergeResult = result4oneObsTer * result4oneObs
 
-        self.cMap4veg = result4oneObs
-        self.cMap4ter = result4oneObsTer
-        self.cMapAll = mergeResult
-        SVF = self.cal_LA(self.cMapAll)
+        self._cMap4veg = result4oneObs
+        self._cMap4ter = result4oneObsTer
+        self._cMapAll = mergeResult
+        SVF = self.cal_LA(self._cMapAll)
         self._SVF_ = SVF
         return (SVF[0], SVF[1])
 
@@ -327,10 +327,10 @@ class LAcalculator(StudyFieldLattice):
         result4oneObsTer = self.centerTerrainDrawed
         mergeResult = result4oneObsTer * result4oneObs
 
-        self.cMap4veg = result4oneObs
-        self.cMap4ter = result4oneObsTer
-        self.cMapAll = mergeResult
-        SVF = self.cal_LA(self.cMapAll)
+        self._cMap4veg = result4oneObs
+        self._cMap4ter = result4oneObsTer
+        self._cMapAll = mergeResult
+        SVF = self.cal_LA(self._cMapAll)
         self._SVF_ = SVF
         return (SVF[0], SVF[1])
 
