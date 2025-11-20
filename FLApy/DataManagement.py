@@ -21,8 +21,7 @@ from pyvista.core.grid import ImageData
 from PVGeo.model_build import CreateUniformGrid
 from PVGeo.grids import ExtractTopography
 from scipy import interpolate
-from scipy.ndimage import distance_transform_edt, binary_dilation, label
-from scipy.ndimage.morphology import generate_binary_structure
+from scipy.ndimage import distance_transform_edt, binary_dilation, label, generate_binary_structure
 from tqdm import tqdm
 
 class StudyFieldLattice(ImageData):
@@ -260,7 +259,7 @@ class StudyFieldLattice(ImageData):
 
     def gen_SFL(self, bbox, resolution,
                 bufferSize = 100,
-                obsType = None, udXSpacing = None, udYSpacing = None, udZNum = None,
+                obsType = 0, udXSpacing = None, udYSpacing = None, udZNum = None,
                 eDSM_threshold = 10, dilationTimes = 1, specificHeight = None):
         # This function is used to generate the SFL. If users don't provide the DSM, DTM and DEM, the function will generate automatically.
         # Parameters:
@@ -288,11 +287,11 @@ class StudyFieldLattice(ImageData):
         zComponent = np.ceil((np.ptp(keptPoints[:, 2])) / resolution) + 1
 
         self.origin = (xMin, yMin, zMin)
-        self.endP = (xMax, yMax, zMax)
+        self._endP = (xMax, yMax, zMax)
         self.spacing = (int(resolution), int(resolution), int(resolution))
         self.dimensions = (int(xComponent), int(yComponent), int(zComponent))
 
-        self.bufferSize = bufferSize
+        self._bufferSize = bufferSize
         bboxBuffered = np.array(bbox)
         bboxBuffered[0] = bboxBuffered[0] - bufferSize
         bboxBuffered[1] = bboxBuffered[1] + bufferSize
@@ -300,7 +299,7 @@ class StudyFieldLattice(ImageData):
         bboxBuffered[3] = bboxBuffered[3] + bufferSize
 
 
-        self.point_cloud_buffered = self.clip_Points(self._point_cloud, bboxBuffered)
+        self._point_cloud_buffered = self.clip_Points(self._point_cloud, bboxBuffered)
         self._vegPoints_buffered = self.clip_Points(self._vegPoints, bboxBuffered)
         self._terPoints_buffered = self.clip_Points(self._terrainPoints, bboxBuffered)
 
@@ -431,7 +430,7 @@ class StudyFieldLattice(ImageData):
         dembbox = np.array([bbox[0] - 1000, bbox[1] + 1000, bbox[2] - 1000, bbox[3] + 1000])
         Cdem = self.m2p(self._DEM.sel(x = slice(dembbox[0], dembbox[1]), y = slice(dembbox[2], dembbox[3])))
 
-        self._SFL.field_data['PTS'] = self.point_cloud_buffered
+        self._SFL.field_data['PTS'] = self._point_cloud_buffered
         self._SFL.field_data['DEM'] = Cdem
         self._SFL.field_data['DTM'] = self.m2p(self._DTM)
         self._SFL.field_data['DSM'] = self.m2p(self._DSM)
@@ -461,8 +460,8 @@ class StudyFieldLattice(ImageData):
         xOrigin = self.origin[0]
         yOrigin = self.origin[1]
 
-        xEnd = self.endP[0]
-        yEnd = self.endP[1]
+        xEnd = self._endP[0]
+        yEnd = self._endP[1]
 
         xx, yy = np.meshgrid(np.arange(xOrigin, xEnd, udXSpacing), np.arange(yOrigin, yEnd, udYSpacing), indexing='ij')
         x_centers = xx + udXSpacing / 2
