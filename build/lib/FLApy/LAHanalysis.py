@@ -340,27 +340,42 @@ class LAH_analysis(object):
 
         relativeHeight = self._relativeHeight_Full_clip
         relativeHeight[relativeHeight < 0] = 0
+        max_h = np.max(relativeHeight)
 
         _SVF = self.normalize_array(self._value_Full_clip)
+        # Scale SVF to 0-100 for sigmoid fitting to match the function definition (numerator=100)
+        _SVF_for_fit = _SVF * 100
 
         if mode == 'v':
-            _params, _params_covariance = curve_fit(sigmoid_func, relativeHeight, _SVF, maxfev=99999)
-
-            # Light attenuation rate
-            self.LAH_Ver_LAR = _params[0]
-            # Height of the inflection point
-            self.LAH_Ver_HIP = _params[1]
-            self.LAH_Ver_HIPr = self.LAH_Ver_HIP / np.max(relativeHeight)
-
-            if _params[1] < 0:
-                _p0 = [np.max(_SVF), np.median(relativeHeight), 1, np.min(_SVF)]
-                _params, _params_covariance = curve_fit(sigmoid_func2, relativeHeight, _SVF, _p0, maxfev=99999)
+            try:
+                # Initial guess for sigmoid_func: a=1, b=median_height
+                p0_v = [1, np.median(relativeHeight)]
+                _params, _params_covariance = curve_fit(sigmoid_func, relativeHeight, _SVF_for_fit, p0=p0_v, maxfev=99999)
 
                 # Light attenuation rate
-                self.LAH_Ver_LAR = _params[2]
+                self.LAH_Ver_LAR = _params[0]
                 # Height of the inflection point
                 self.LAH_Ver_HIP = _params[1]
-                self.LAH_Ver_HIPr = self.LAH_Ver_HIP / np.max(relativeHeight)
+                self.LAH_Ver_HIPr = self.LAH_Ver_HIP / max_h
+
+                # If fit is out of bounds or negative, try generalized logistic function
+                if _params[1] < 0 or _params[1] > max_h:
+                    _p0 = [np.max(_SVF_for_fit), np.median(relativeHeight), 1, np.min(_SVF_for_fit)]
+                    _params, _params_covariance = curve_fit(sigmoid_func2, relativeHeight, _SVF_for_fit, p0=_p0, maxfev=99999)
+
+                    self.LAH_Ver_LAR = _params[2]
+                    self.LAH_Ver_HIP = _params[1]
+                    self.LAH_Ver_HIPr = self.LAH_Ver_HIP / max_h
+                
+                # Clamp negative HIP to 0 if it's still negative (convex profile starting at ground)
+                if self.LAH_Ver_HIP < 0:
+                    self.LAH_Ver_HIP = 0
+                    self.LAH_Ver_HIPr = 0
+                    
+            except:
+                self.LAH_Ver_LAR = 0
+                self.LAH_Ver_HIP = 0
+                self.LAH_Ver_HIPr = 0
 
 
         elif mode == 'c':
@@ -373,18 +388,47 @@ class LAH_analysis(object):
 
             for pixel_wise in tqdm(range(len(_Xflat)), desc = 'Fitting Sigmoid Function...', ncols=100,total=len(_Xflat)):
                 _coords_index = np.where((_coords[:, 0] == _Xflat[pixel_wise]) & (_coords[:, 1] == _Yflat[pixel_wise]))
-                _SVF_selected = _SVF[_coords_index]
+                _SVF_selected = _SVF_for_fit[_coords_index]
                 _relativeHeight_selected = relativeHeight[_coords_index]
-                _params, _params_covariance = curve_fit(sigmoid_func, _relativeHeight_selected, _SVF_selected, maxfev=99999)
-                _params_Pool.append(_params)
+                
+                if len(_SVF_selected) < 4: # Need at least 4 points for sigmoid_func2
+                    continue
+                    
+                try:
+                    # Try simple sigmoid first
+                    p0_c = [1, np.median(_relativeHeight_selected)]
+                    _params, _params_covariance = curve_fit(sigmoid_func, _relativeHeight_selected, _SVF_selected, p0=p0_c, maxfev=99999)
+                    
+                    lar = _params[0]
+                    hip = _params[1]
+                    
+                    # If bad fit, try generalized logistic
+                    if hip < 0 or hip > max_h:
+                        _p0 = [np.max(_SVF_selected), np.median(_relativeHeight_selected), 1, np.min(_SVF_selected)]
+                        _params, _params_covariance = curve_fit(sigmoid_func2, _relativeHeight_selected, _SVF_selected, p0=_p0, maxfev=99999)
+                        lar = _params[2]
+                        hip = _params[1]
+                    
+                    # Clamp HIP to valid range [0, max_h] for physical interpretation
+                    if hip < 0: hip = 0
+                    if hip > max_h: hip = max_h
+                        
+                    _params_Pool.append([lar, hip])
+                except:
+                    pass
 
-            _params_Pool = np.array(_params_Pool)
-            self.LAH_Ver_LAR = np.mean(_params_Pool[:, 0])
-            self.LAH_Ver_HIP = np.mean(_params_Pool[:, 1])
-            self.LAH_Ver_HIPr = self.LAH_Ver_HIP / np.max(relativeHeight)
+            if len(_params_Pool) > 0:
+                _params_Pool = np.array(_params_Pool)
+                self.LAH_Ver_LAR = np.mean(_params_Pool[:, 0])
+                self.LAH_Ver_HIP = np.mean(_params_Pool[:, 1])
+                self.LAH_Ver_HIPr = self.LAH_Ver_HIP / max_h
+            else:
+                self.LAH_Ver_LAR = 0
+                self.LAH_Ver_HIP = 0
+                self.LAH_Ver_HIPr = 0
 
-        relativeHeight = self.normalize_array(relativeHeight)
-        __points = np.vstack((relativeHeight, _SVF)).transpose()
+        relativeHeight_norm = self.normalize_array(relativeHeight)
+        __points = np.vstack((relativeHeight_norm, _SVF)).transpose()
         _hull = ConvexHull(__points)
         self.LAH_Ver_ACH = _hull.volume
         print('Vertical LAH was calculated in {} seconds'.format(time.time() - time1))
@@ -576,7 +620,13 @@ class LAH_analysis(object):
 
                 oneBody_h_volume = oneBody_h.n_cells * self.voxelVolume
                 oneBody_h_Surface = oneBody_h.extract_geometry()
-                oneBody_h_area = oneBody_h_Surface.n_cells * self.voxelArea
+                
+                if hasattr(oneBody_h_Surface, 'area'):
+                    oneBody_h_area = oneBody_h_Surface.area
+                else:
+                    sized = oneBody_h_Surface.compute_cell_sizes(length=False, volume=False, area=True)
+                    oneBody_h_area = np.sum(sized.cell_data['Area'])
+
                 oneHull_h = ConvexHull(oneBody_h.points)
                 oneHull_h_pts = oneBody_h.points[oneHull_h.vertices]
                 Chot, r2hot = miniball.get_bounding_ball(np.array(oneHull_h_pts))
@@ -592,7 +642,13 @@ class LAH_analysis(object):
 
                 oneBody_c_volume = oneBody_c.n_cells * self.voxelVolume
                 oneBody_c_Surface = oneBody_c.extract_geometry()
-                oneBody_c_area = oneBody_c_Surface.n_cells * self.voxelArea
+                
+                if hasattr(oneBody_c_Surface, 'area'):
+                    oneBody_c_area = oneBody_c_Surface.area
+                else:
+                    sized = oneBody_c_Surface.compute_cell_sizes(length=False, volume=False, area=True)
+                    oneBody_c_area = np.sum(sized.cell_data['Area'])
+
                 oneHull_c = ConvexHull(oneBody_c.points)
                 oneHull_c_pts = oneBody_c.points[oneHull_c.vertices]
                 Ccold, r2cold = miniball.get_bounding_ball(np.array(oneHull_c_pts))
@@ -602,8 +658,16 @@ class LAH_analysis(object):
 
         self._inGrid.field_data['LAH_3Dcluster_Hot_SVF'] = np.array(sumStaSVFHot)
         self._inGrid.field_data['LAH_3Dcluster_Cold_SVF'] = np.array(sumStaSVFCold)
-        sumStaHot = np.array(sumStaHot)
-        sumStaCold = np.array(sumStaCold)
+        
+        if len(sumStaHot) == 0:
+            sumStaHot = np.zeros((1, 3))
+        else:
+            sumStaHot = np.array(sumStaHot)
+            
+        if len(sumStaCold) == 0:
+            sumStaCold = np.zeros((1, 3))
+        else:
+            sumStaCold = np.array(sumStaCold)
 
         self.LAH_3Dcluster_Hot_Volume = np.sum(sumStaHot[:, 0])
         self.LAH_3Dcluster_Cold_Volume = np.sum(sumStaCold[:, 0])
@@ -611,18 +675,21 @@ class LAH_analysis(object):
         self.LAH_3Dcluster_Hot_Volume_relative = self.LAH_3Dcluster_Hot_Volume / (self.NumLandscape * self.voxelVolume)
         self.LAH_3Dcluster_Cold_Volume_relative = self.LAH_3Dcluster_Cold_Volume / (self.NumLandscape * self.voxelVolume)
 
-        self.LAH_3Dcluster_VolumeRatio_Hot2Cold = self.LAH_3Dcluster_Hot_Volume / self.LAH_3Dcluster_Cold_Volume
+        if self.LAH_3Dcluster_Cold_Volume > 0:
+            self.LAH_3Dcluster_VolumeRatio_Hot2Cold = self.LAH_3Dcluster_Hot_Volume / self.LAH_3Dcluster_Cold_Volume
+        else:
+            self.LAH_3Dcluster_VolumeRatio_Hot2Cold = 0
 
         self.LAH_3Dcluster_Hot_Largest_Volume = np.max(sumStaHot[:, 0])
         self.LAH_3Dcluster_Cold_Largest_Volume = np.max(sumStaCold[:, 0])
         self.LAH_3Dcluster_Hot_Largest_Volume_index = (self.LAH_3Dcluster_Hot_Largest_Volume / (self.NumLandscape * self.voxelVolume)) * 100
         self.LAH_3Dcluster_Cold_Largest_Volume_index = (self.LAH_3Dcluster_Cold_Largest_Volume / (self.NumLandscape * self.voxelVolume)) * 100
 
-        self.LAH_3Dcluster_Hot_Abundance = len(sumStaHot[:, 0])
-        self.LAH_3Dcluster_Cold_Abundance = len(sumStaCold[:, 0])
+        self.LAH_3Dcluster_Hot_Abundance = len(sumStaHot[:, 0]) if np.any(sumStaHot[:, 0]) else 0
+        self.LAH_3Dcluster_Cold_Abundance = len(sumStaCold[:, 0]) if np.any(sumStaCold[:, 0]) else 0
 
-        self.LAH_3Dcluster_Hot_Volume_Numweight = self.LAH_3Dcluster_Hot_Volume / self.LAH_3Dcluster_Hot_Abundance
-        self.LAH_3Dcluster_Cold_Volume_Numweight = self.LAH_3Dcluster_Cold_Volume / self.LAH_3Dcluster_Cold_Abundance
+        self.LAH_3Dcluster_Hot_Volume_Numweight = self.LAH_3Dcluster_Hot_Volume / self.LAH_3Dcluster_Hot_Abundance if self.LAH_3Dcluster_Hot_Abundance > 0 else 0
+        self.LAH_3Dcluster_Cold_Volume_Numweight = self.LAH_3Dcluster_Cold_Volume / self.LAH_3Dcluster_Cold_Abundance if self.LAH_3Dcluster_Cold_Abundance > 0 else 0
 
         self.LAH_3Dcluster_Hot_Cohesion = np.mean(self.cal_Cohesion(N = self.NumLandscape, P = sumStaHot[:, 1], A = sumStaHot[:, 0]))
         self.LAH_3Dcluster_Cold_Cohesion = np.mean(self.cal_Cohesion(N = self.NumLandscape, P = sumStaCold[:, 1], A = sumStaCold[:, 0]))
@@ -632,8 +699,13 @@ class LAH_analysis(object):
 
         miniballHotVolume = self.cal_ShphericalVolume(sumStaHot[:, 2])
         miniballColdVolume = self.cal_ShphericalVolume(sumStaCold[:, 2])
-        self.LAH_3Dcluster_Hot_Circle = np.mean(sumStaHot[:, 0] / miniballHotVolume)
-        self.LAH_3Dcluster_Cold_Circle = np.mean(sumStaCold[:, 0] / miniballColdVolume)
+        
+        with np.errstate(divide='ignore', invalid='ignore'):
+            self.LAH_3Dcluster_Hot_Circle = np.nanmean(sumStaHot[:, 0] / miniballHotVolume)
+            self.LAH_3Dcluster_Cold_Circle = np.nanmean(sumStaCold[:, 0] / miniballColdVolume)
+            
+        if np.isnan(self.LAH_3Dcluster_Hot_Circle): self.LAH_3Dcluster_Hot_Circle = 0
+        if np.isnan(self.LAH_3Dcluster_Cold_Circle): self.LAH_3Dcluster_Cold_Circle = 0
 
 
     def cal_Cohesion(self, N, P, A):

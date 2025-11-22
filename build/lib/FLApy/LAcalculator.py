@@ -17,11 +17,161 @@ import itertools
 import os
 import time
 import pandas as pd
-
+import tempfile
+import shutil
 from scipy.spatial import KDTree
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, dump, load
 from FLApy.DataManagement import StudyFieldLattice
 from tqdm import tqdm
+
+# Standalone helper functions for parallel computing
+def _pol2cart(rho, phi):
+    x = rho * np.cos(phi)
+    y = rho * np.sin(phi)
+    return x, y
+
+def _sph2cart(theta, phi, r):
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+    return x, y, z
+
+def _sph2pol(theta, phi, mapRadius):
+    r = mapRadius * np.ones(len(phi))
+    rho = r * np.sin(theta) / (1 + np.cos(theta))
+    return rho, phi
+
+def _cart2sph(x, y, z):
+    coords = np.vstack((x, y, z)).transpose()
+    r = np.sqrt(np.sum((coords) ** 2, axis=1))
+    theta = np.arccos(z / (r))
+    phi = np.arctan2(y, x)
+    return r, theta, phi
+
+def _cart2pol(x, y):
+    r = np.sqrt(x ** 2 + y ** 2)
+    theta = np.arctan2(y, x)
+    return r, theta
+
+def _referenceGrid(mapRadius):
+    radius = mapRadius
+    xgrid, ygrid = np.meshgrid(np.arange(1, radius * 2 + 1), np.arange(1, radius * 2 + 1))
+    xgrid = (xgrid - radius - 0.5)
+    ygrid = (ygrid - radius - 0.5)
+    gridCoord = np.column_stack((xgrid.ravel(), ygrid.ravel()))
+    grid_rad, grid_theta = _cart2pol(xgrid.ravel(), ygrid.ravel())
+    grid_rad[grid_rad > radius] = np.nan
+
+    grid_image = np.ones((radius * 2, radius * 2))
+    imdx = np.reshape(np.isnan(grid_rad), grid_image.shape)
+    grid_image[imdx] = 0
+    return grid_image, gridCoord
+
+def _drawIn_vegPoints(inPoints, inObs, pointSizeRangeSet, mapRadius):
+    image2ev, gridCoord = _referenceGrid(mapRadius)
+    pointSizeRangeMin = min(pointSizeRangeSet)
+    pointSizeRangeMax = max(pointSizeRangeSet)
+    vegCBOed = inPoints - inObs
+    vegCBOed = vegCBOed[vegCBOed[:, 2] > 0]
+    
+    if len(vegCBOed) == 0:
+        return image2ev
+    
+    veg2sph_r, veg2sph_theta, veg2sph_phi = _cart2sph(vegCBOed[:, 0], vegCBOed[:, 1], vegCBOed[:, 2])
+    veg2pol_rho, veg2pol_phi = _sph2pol(veg2sph_theta, veg2sph_phi, mapRadius)
+    tx, ty = _pol2cart(veg2pol_rho, veg2pol_phi)
+    datcart = np.column_stack((tx, ty))
+    
+    gridCoordCellSize = 1.0 
+    
+    Dmin, Dmax = np.min(veg2sph_r), np.max(veg2sph_r)
+    if Dmin == Dmax:
+        position = 0
+    else:
+        position = (veg2sph_r - Dmin) / (Dmax - Dmin)
+    
+    rmax = (pointSizeRangeMax / 2) * gridCoordCellSize
+    rmin = (pointSizeRangeMin / 2) * gridCoordCellSize
+    told = (((1 - position) * (rmax - rmin)) + rmin)
+    
+    tree = KDTree(gridCoord)
+    pointsWithin = tree.query_ball_point(x=datcart, r=told)
+    indx = np.array(list(itertools.chain.from_iterable(pointsWithin)))
+    indx = np.unique(indx)
+    ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
+
+    if len(indx) == 0:
+        return image2ev
+    else:
+        ndx[indx] = True
+        imdx = np.reshape(ndx, image2ev.shape)
+        image2ev[imdx] = 0
+        return image2ev
+
+def _drawIn_terrain(inTerrain, inObs, mapRadius):
+    image2ev, gridCoord = _referenceGrid(mapRadius)
+    ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
+    terCBOed = inTerrain - inObs
+    terCBOed = terCBOed[terCBOed[:, 2] > 0]
+    ter2sph_r, ter2sph_theta, ter2sph_phi = _cart2sph(terCBOed[:, 0], terCBOed[:, 1], terCBOed[:, 2])
+    ter2pol_rho, ter2pol_phi = _sph2pol(ter2sph_theta, ter2sph_phi, mapRadius)
+    bins = 360
+    gridCoordRho, gridCoordPhi = _cart2pol(gridCoord[:, 0], gridCoord[:, 1])
+    
+    ndx = update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoordRho, ndx)
+    imdx = np.reshape(ndx, image2ev.shape)
+    image2ev[imdx] = 0
+    return image2ev
+
+def _cal_LA(image2ev, mapRadius):
+    _, gridCoord = _referenceGrid(mapRadius)
+    radius = mapRadius
+    gridCoordRho, gridCoordPhi = _cart2pol(gridCoord[:, 0], gridCoord[:, 1])
+
+    image2ev = image2ev.ravel()
+
+    n = 9
+    lens_profile_tht = np.arange(0, 91, 10)
+    lens_profile_rpix = np.linspace(0, 1, n + 1)
+    ring_tht = np.linspace(0, 90, n + 1)
+    ring_radius = np.interp(ring_tht, lens_profile_tht, lens_profile_rpix * radius)
+
+    num_rings = len(ring_radius) - 1
+    white_to_all_ratio = np.empty(num_rings) * np.nan
+    surface_area_ratio_hemi = np.empty(num_rings) * np.nan
+    surface_area_ratio_flat = np.empty(num_rings) * np.nan
+
+    for rix in range(num_rings):
+        inner_radius = ring_radius[rix]
+        outer_radius = ring_radius[rix + 1]
+        relevant_pix = np.where((gridCoordRho > inner_radius) & (gridCoordRho <= outer_radius))[0]
+
+        if len(relevant_pix) == 0:
+             white_to_all_ratio[rix] = 0
+        else:
+             white_to_all_ratio[rix] = np.sum(image2ev[relevant_pix] == 1) / len(relevant_pix)
+             
+        surface_area_ratio_hemi[rix] = np.cos(np.radians(ring_tht[rix])) - np.cos(np.radians(ring_tht[rix + 1]))
+        surface_area_ratio_flat[rix] = np.sin(np.radians(ring_tht[rix + 1])) ** 2 - np.sin(np.radians(ring_tht[rix])) ** 2
+
+    flat_SVF = np.nansum(white_to_all_ratio * surface_area_ratio_flat)
+    hemi_SVF = np.nansum(white_to_all_ratio * surface_area_ratio_hemi)
+
+    return (flat_SVF, hemi_SVF)
+
+def _compute_single_task(index, obsIn, pointsBuffered, mergeTerrain, pointSizeRange, mapRadius):
+    result4oneObs = _drawIn_vegPoints(pointsBuffered, obsIn, pointSizeRange, mapRadius)
+    result4oneObsTer = _drawIn_terrain(mergeTerrain, obsIn, mapRadius)
+    mergeResult = result4oneObsTer * result4oneObs
+    SVF = _cal_LA(mergeResult, mapRadius)
+    return (SVF[0], SVF[1])
+
+def _compute_single_task_fast(index, obsIn, pointsBuffered, centerTerrainDrawed, pointSizeRange, mapRadius):
+    result4oneObs = _drawIn_vegPoints(pointsBuffered, obsIn, pointSizeRange, mapRadius)
+    result4oneObsTer = centerTerrainDrawed
+    mergeResult = result4oneObsTer * result4oneObs
+    SVF = _cal_LA(mergeResult, mapRadius)
+    return (SVF[0], SVF[1])
 
 class LAcalculator(StudyFieldLattice):
     # The class is used to calculate the LA based on the input SFL.
@@ -334,12 +484,14 @@ class LAcalculator(StudyFieldLattice):
         self._SVF_ = SVF
         return (SVF[0], SVF[1])
 
-    def computeBatch(self, save = None, CPU_count = None):
+    def computeBatch(self, save = None, CPU_count = None, use_memmap = False):
         # Compute the LA for a batch of observations.
         # Parameters:
         #   save: the path to save the LA. If None, the LA will be saved in a temporary file.
-        #   multiPro: the method to use for multiprocessing. 'joblib' for joblib, 'p_tqdm' for p_tqdm.
         #   CPU_count: the number of CPUs to use. If None, all CPUs will be used.
+        #   use_memmap: Whether to use memory mapping for large data. 
+        #               Set to True if you encounter MemoryError or OSError. 
+        #               Default is False (faster for small/medium data).
 
         if CPU_count is None:
             numCPU = os.cpu_count() - 1
@@ -352,10 +504,63 @@ class LAcalculator(StudyFieldLattice):
         time_start = time.time()
         print('\033[32mProcessing started!'+ 'Number of obs:'+ str(len(obsIdx)) + '\033[0m')
 
-        if self.centerTerrain is False:
-            SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingle)(arg) for arg in obsIdx)
+        # Prepare data for parallel processing
+        obs_set = self._obsSet
+        points = self.pointsBuffered
+        pointSizeRange = self.pointSizeRange
+        mapRadius = self._mapRadius
+        
+        # Logic for memory mapping vs direct memory transfer
+        if use_memmap:
+            # Create a temporary directory for memory mapping
+            temp_folder = tempfile.mkdtemp()
+            try:
+                points_filename = os.path.join(temp_folder, 'points.mmap')
+                dump(points, points_filename)
+                points_mmap = load(points_filename, mmap_mode='r')
+
+                if self.centerTerrain is False:
+                    terrain = self.mergeTerrain
+                    terrain_filename = os.path.join(temp_folder, 'terrain.mmap')
+                    dump(terrain, terrain_filename)
+                    terrain_mmap = load(terrain_filename, mmap_mode='r')
+                    
+                    # Use TaskRunner with memmapped arrays
+                    runner = _TaskRunner(points_mmap, terrain_mmap, pointSizeRange, mapRadius)
+                    SVFset = Parallel(n_jobs=numCPU, verbose=10, max_nbytes=None)(
+                        delayed(runner)(i, obs_set[i]) for i in obsIdx
+                    )
+                else:
+                    centerTerrainDrawed = self.centerTerrainDrawed
+                    centerTerrain_filename = os.path.join(temp_folder, 'centerTerrain.mmap')
+                    dump(centerTerrainDrawed, centerTerrain_filename)
+                    centerTerrain_mmap = load(centerTerrain_filename, mmap_mode='r')
+                    
+                    # Use TaskRunner with memmapped arrays
+                    runner = _TaskRunner(points_mmap, None, pointSizeRange, mapRadius, centerTerrain_mmap)
+                    SVFset = Parallel(n_jobs=numCPU, verbose=10, max_nbytes=None)(
+                        delayed(runner)(i, obs_set[i]) for i in obsIdx
+                    )
+            finally:
+                try:
+                    shutil.rmtree(temp_folder)
+                except:
+                    pass
         else:
-            SVFset = Parallel(n_jobs=numCPU, verbose=100)(delayed(self.computeSingleFAST)(arg) for arg in obsIdx)
+            # Direct memory transfer (Faster for small/medium data, but higher memory usage)
+            # We use _TaskRunner to encapsulate data and pre-compute KDTree
+            if self.centerTerrain is False:
+                terrain = self.mergeTerrain
+                runner = _TaskRunner(points, terrain, pointSizeRange, mapRadius)
+                SVFset = Parallel(n_jobs=numCPU, verbose=10)(
+                    delayed(runner)(i, obs_set[i]) for i in obsIdx
+                )
+            else:
+                centerTerrainDrawed = self.centerTerrainDrawed
+                runner = _TaskRunner(points, None, pointSizeRange, mapRadius, centerTerrainDrawed)
+                SVFset = Parallel(n_jobs=numCPU, verbose=10)(
+                    delayed(runner)(i, obs_set[i]) for i in obsIdx
+                )
 
         time_end = time.time()
         print('\033[32mProcessing finished!'+ str(time_end - time_start)+'s' + '\033[0m')
@@ -471,8 +676,140 @@ def update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoo
             ndx[keptGridRhoIdx] = True
         return ndx
 
+class _TaskRunner:
+    def __init__(self, points, terrain, pointSizeRange, mapRadius, centerTerrainDrawed=None):
+        self.points = points
+        self.terrain = terrain
+        self.pointSizeRange = pointSizeRange
+        self.mapRadius = mapRadius
+        self.centerTerrainDrawed = centerTerrainDrawed
+        
+        # Pre-compute reference grid and KDTree to avoid re-computing it for every task
+        self.grid_image, self.gridCoord = _referenceGrid(mapRadius)
+        self.tree = KDTree(self.gridCoord)
 
+    def __call__(self, index, obsIn):
+        if self.centerTerrainDrawed is None:
+            # Use terrain points
+            result4oneObs = _drawIn_vegPoints_optimized(self.points, obsIn, self.pointSizeRange, self.mapRadius, self.tree, self.grid_image, self.gridCoord)
+            result4oneObsTer = _drawIn_terrain_optimized(self.terrain, obsIn, self.mapRadius, self.grid_image, self.gridCoord)
+            mergeResult = result4oneObsTer * result4oneObs
+            SVF = _cal_LA_optimized(mergeResult, self.mapRadius, self.gridCoord)
+            return (SVF[0], SVF[1])
+        else:
+            # Use pre-drawn center terrain
+            result4oneObs = _drawIn_vegPoints_optimized(self.points, obsIn, self.pointSizeRange, self.mapRadius, self.tree, self.grid_image, self.gridCoord)
+            result4oneObsTer = self.centerTerrainDrawed
+            mergeResult = result4oneObsTer * result4oneObs
+            SVF = _cal_LA_optimized(mergeResult, self.mapRadius, self.gridCoord)
+            return (SVF[0], SVF[1])
 
+# Optimized standalone functions that accept pre-computed structures
+def _drawIn_vegPoints_optimized(inPoints, inObs, pointSizeRangeSet, mapRadius, tree, grid_image_template, gridCoord):
+    # Copy the template image to avoid modifying the shared one
+    image2ev = grid_image_template.copy()
+    
+    pointSizeRangeMin = min(pointSizeRangeSet)
+    pointSizeRangeMax = max(pointSizeRangeSet)
+    vegCBOed = inPoints - inObs
+    vegCBOed = vegCBOed[vegCBOed[:, 2] > 0]
+    
+    if len(vegCBOed) == 0:
+        return image2ev
+    
+    veg2sph_r, veg2sph_theta, veg2sph_phi = _cart2sph(vegCBOed[:, 0], vegCBOed[:, 1], vegCBOed[:, 2])
+    veg2pol_rho, veg2pol_phi = _sph2pol(veg2sph_theta, veg2sph_phi, mapRadius)
+    tx, ty = _pol2cart(veg2pol_rho, veg2pol_phi)
+    datcart = np.column_stack((tx, ty))
+    
+    gridCoordCellSize = 1.0 
+    
+    Dmin, Dmax = np.min(veg2sph_r), np.max(veg2sph_r)
+    if Dmin == Dmax:
+        position = 0
+    else:
+        position = (veg2sph_r - Dmin) / (Dmax - Dmin)
+    
+    rmax = (pointSizeRangeMax / 2) * gridCoordCellSize
+    rmin = (pointSizeRangeMin / 2) * gridCoordCellSize
+    told = (((1 - position) * (rmax - rmin)) + rmin)
+    
+    # Use the pre-computed tree
+    pointsWithin = tree.query_ball_point(x=datcart, r=told)
+    indx = np.array(list(itertools.chain.from_iterable(pointsWithin)))
+    indx = np.unique(indx)
+    ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
+
+    if len(indx) == 0:
+        return image2ev
+    else:
+        ndx[indx] = True
+        imdx = np.reshape(ndx, image2ev.shape)
+        image2ev[imdx] = 0
+        return image2ev
+
+def _drawIn_terrain_optimized(inTerrain, inObs, mapRadius, grid_image_template, gridCoord):
+    image2ev = grid_image_template.copy()
+    ndx = np.zeros(gridCoord[:, 0].size, dtype=bool)
+    terCBOed = inTerrain - inObs
+    terCBOed = terCBOed[terCBOed[:, 2] > 0]
+    ter2sph_r, ter2sph_theta, ter2sph_phi = _cart2sph(terCBOed[:, 0], terCBOed[:, 1], terCBOed[:, 2])
+    ter2pol_rho, ter2pol_phi = _sph2pol(ter2sph_theta, ter2sph_phi, mapRadius)
+    bins = 360
+    gridCoordRho, gridCoordPhi = _cart2pol(gridCoord[:, 0], gridCoord[:, 1])
+    
+    ndx = update_terrain_indices(gridCoordPhi, ter2sph_phi, ter2pol_rho, bins, gridCoordRho, ndx)
+    imdx = np.reshape(ndx, image2ev.shape)
+    image2ev[imdx] = 0
+    return image2ev
+
+def _cal_LA_optimized(image2ev, mapRadius, gridCoord):
+    # Re-use gridCoord instead of recomputing it
+    radius = mapRadius
+    gridCoordRho, gridCoordPhi = _cart2pol(gridCoord[:, 0], gridCoord[:, 1])
+
+    image2ev = image2ev.ravel()
+
+    n = 9
+    lens_profile_tht = np.arange(0, 91, 10)
+    lens_profile_rpix = np.linspace(0, 1, n + 1)
+    ring_tht = np.linspace(0, 90, n + 1)
+    ring_radius = np.interp(ring_tht, lens_profile_tht, lens_profile_rpix * radius)
+
+    num_rings = len(ring_radius) - 1
+    white_to_all_ratio = np.empty(num_rings) * np.nan
+    surface_area_ratio_hemi = np.empty(num_rings) * np.nan
+    surface_area_ratio_flat = np.empty(num_rings) * np.nan
+
+    for rix in range(num_rings):
+        inner_radius = ring_radius[rix]
+        outer_radius = ring_radius[rix + 1]
+        relevant_pix = np.where((gridCoordRho > inner_radius) & (gridCoordRho <= outer_radius))[0]
+
+        if len(relevant_pix) == 0:
+             white_to_all_ratio[rix] = 0
+        else:
+             white_to_all_ratio[rix] = np.sum(image2ev[relevant_pix] == 1) / len(relevant_pix)
+             
+        surface_area_ratio_hemi[rix] = np.cos(np.radians(ring_tht[rix])) - np.cos(np.radians(ring_tht[rix + 1]))
+        surface_area_ratio_flat[rix] = np.sin(np.radians(ring_tht[rix + 1])) ** 2 - np.sin(np.radians(ring_tht[rix])) ** 2
+
+    flat_SVF = np.nansum(white_to_all_ratio * surface_area_ratio_flat)
+    hemi_SVF = np.nansum(white_to_all_ratio * surface_area_ratio_hemi)
+
+    return (flat_SVF, hemi_SVF)
+
+def _compute_single_task(index, obsIn, pointsBuffered, mergeTerrain, pointSizeRange, mapRadius):
+    # Legacy wrapper for backward compatibility if needed, but computeBatch now uses TaskRunner
+    runner = _TaskRunner(pointsBuffered, mergeTerrain, pointSizeRange, mapRadius)
+    return runner(index, obsIn)
+
+def _compute_single_task_fast(index, obsIn, pointsBuffered, centerTerrainDrawed, pointSizeRange, mapRadius):
+    # Legacy wrapper
+    runner = _TaskRunner(pointsBuffered, None, pointSizeRange, mapRadius, centerTerrainDrawed)
+    return runner(index, obsIn)
 
 if __name__ == "__main__":
     pass
+
+

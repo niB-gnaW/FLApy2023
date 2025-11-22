@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: FLApy
-Version: 2.1.3
+Version: 2.1.4
 Summary: Forest Light availability heterogeneity Analysis in Python
 Home-page: https://github.com/niB-gnaW/FLApy2023
 Author: Bin Wang
@@ -65,6 +65,11 @@ For other microclimate factors, FLApy accepts calculations from third parties (w
 We are excited to announce that a GUI version of FLApy is currently under development and will be released soon! This new version will provide a user-friendly interface to make forest light analysis even more accessible. Stay tuned!
 
 ## Update log
+### 2025-11-22 Version 2.1.4:
+- 1. Improved the robustness of Vertical LAH indicators (HIP, LAR) calculation by adding physical constraints and optimizing the fitting process.
+- 2. Fixed the surface area calculation in 3D Cluster analysis to ensure accuracy on triangulated meshes.
+- 3. Corrected the class names and method calls in the documentation.
+
 ### 2025-11-21 Version 2.1.3:
 - 1. Fix the compatibility issue with PyVista 0.43.0+ by using private attributes for custom properties.
 - 2. Fix the deprecated import warning from SciPy 2.0.0+.
@@ -98,6 +103,12 @@ GDAL(http://www.gdal.org/) and C++ 14.0 are required to be installed before inst
 pip install FLApy      # Install the package
 ```
 
+## Initialization
+After installing FLApy, please run the following command to initialize the package and install necessary dependencies (e.g., `naturalneighbor`):
+```
+python -m FLApy.FLApy_ini
+```
+
 ## Usage
 The FLApy workflow is as follows:
 
@@ -107,9 +118,10 @@ A simple example can be found in the [Simple guidance](https://github.com/niB-gn
 
 ### Import FLApy
 
-```
+```python
 import FLApy as fp
 ```
+
 ### Read data
 In general, the point cloud data is required, and the DSM, DEM and DTM are optional.
 The FLApy package can read the point cloud data in the LAS format. 
@@ -117,17 +129,18 @@ And the DSM and DTM can be produced automatically from the point cloud data when
 Yet, the third-party tools are recommended to produce these raster data.
 Especially, the study area is large, and the point cloud data is too big, the DSM, DEM and DTM can be produced by using the [lastools](https://rapidlasso.com/lastools/).
 Besides, if the study area locates in a mountainous area, the DEM is recommended to be provided. 
-```
+
+```python
 site = fp.DataManagement.StudyFieldLattice()
 site.read_LasData('/your/path/to/point.las')    
 ```
 
-
-### generate A Study-Field Lattice (SFL)
+### Generate A Study-Field Lattice (SFL)
 SFL is a data container for storing the information of each voxel in the study area. And all data processing and analysis in FLApy are based on the SFL.
 `gen_SFL` is a function to generate the SFL. It needs a study area extent determined by `[min_X, max_X, min_Y, max_Y]`. 
 The `resolution` is the size of each voxel in the SFL. The unit is meter.
-```
+
+```python
 site.gen_SFL([xmin, xmax, ymin, ymax], resolution=1)
 ```
 
@@ -137,35 +150,29 @@ The voxel-traverse method is used to calculate the LAv within SFL if the observa
 A cutting-edge parallel computing method is used to calculate the LAv within SFL, it can save a lot of time if the study area is large.
 The actual processing time depends on the number of CPU cores.
 
-```
+```python
 siteLA = fp.LAcalculator.LAcalculator(site)
-result = siteLA.com_allLAH()
-print(result)
+siteLA.computeBatch(CPU_count=4)
 ```
-
-### Visualization
-The 'Visualization' module is used to visualize the 3D heterogeneity statistics of the LAH analysis.
-```
-fp.Visualization.vis_Figures(siteLAH)
-```
-
 
 ### 3D Light Availability Heterogeneity (LAH) analysis
-The LAH is calculated by the `LAH_calculator` class. The `field` is the LA field to be calculated.
+The LAH is calculated by the `LAH_analysis` class. The `field` is the LA field to be calculated.
 If the path of saving is not provided, the LAH will be saved in the same path of the SFL.
-```
-siteLAH = fp.LAHanalysis.LAH_calculator(siteLA)
+
+```python
+siteLAH = fp.LAHanalysis.LAH_analysis(siteLA)
 results = siteLAH.com_allLAH()
 print(results)
 ```
 
 ### Visualization
-The `visualize` module is used to visualize the data in the SFL. The `field` is the field to be visualized. 
+The `Visualization` module is used to visualize the data in the SFL and the results of LAH analysis. 
 The module contains the following functions:
 - `vis_3Dpoint` is used to visualize the 3D point cloud data.
 - `vis_Raster` is used to visualize the raster data.
 - `vis_Figures` is used to visualize the summary of the LAH analysis across the four spatial scales.
-```
+
+```python
 fp.Visualization.vis_Figures(siteLAH)
 ```
 ![](https://github.com/niB-gnaW/FLApy2023/blob/master/docs/Figure.png)
